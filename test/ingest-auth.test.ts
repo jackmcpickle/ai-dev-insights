@@ -171,6 +171,53 @@ describe("ingest auth", () => {
         expect(comment).toContain("Token fields are optional");
     });
 
+    it("includes branch-only events when a PR query also sends the branch", async () => {
+        const store = createMemoryStore();
+        const app = createApp({ store });
+        await ingest(app, {
+            hook_event: "stop",
+            git_branch: "feat/usage",
+            repo: "jackmcpickle/ai-dev-insights",
+            conversation_id: "c-branch",
+            generation_id: "g-branch",
+            usage: { input_tokens: 10, output_tokens: 1 },
+        });
+
+        const usageRes = await app.request(
+            "/v1/usage?branch=feat/usage&pr=12&repo=jackmcpickle/ai-dev-insights",
+            { headers: { authorization: `Bearer ${TOKEN}` } },
+            env(),
+        );
+        const body = (await usageRes.json()) as {
+            totals: { event_count: number; input_tokens: number };
+        };
+        expect(body.totals.event_count).toBe(1);
+        expect(body.totals.input_tokens).toBe(10);
+    });
+
+    it("keeps afterAgentResponse tokens when stop has none", async () => {
+        const store = createMemoryStore();
+        const app = createApp({ store });
+        await ingest(
+            app,
+            buildIngestPayload(loadFixture("afterAgentResponse.json"), {
+                git_branch: "feat/usage",
+            }),
+        );
+        await ingest(app, {
+            hook_event: "stop",
+            conversation_id: "conv-prompt-1",
+            generation_id: "gen-prompt-1",
+            git_branch: "feat/usage",
+            status: "completed",
+        });
+
+        const report = summarizeEvents(store.events, { branch: "feat/usage" });
+        expect(report.totals.input_tokens).toBe(1180993);
+        expect(report.totals.turns_with_token_fields).toBe(1);
+        expect(report.totals.turns_missing_token_fields).toBe(0);
+    });
+
     it("does not double-count stop and afterAgentResponse for one generation", async () => {
         const store = createMemoryStore();
         const app = createApp({ store });

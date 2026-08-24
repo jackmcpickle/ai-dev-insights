@@ -18,7 +18,8 @@ const TEXT_LIMIT = 8_192;
 const SENSITIVE_KEY =
     /^(content|authorization|api[_-]?key|secret|password|token|credential|private[_-]?key)$/iu;
 const SENSITIVE_SUBSTR =
-    /(api[_-]?key|secret|password|credential|private[_-]?key|authorization)/iu;
+    /(api[_-]?key|token|secret|password|credential|private[_-]?key|authorization)/iu;
+const KEEP_TOKEN_COUNTS = /tokens$/iu;
 
 const USAGE_FIELDS = [
     "input_tokens",
@@ -187,7 +188,10 @@ export function sanitizePayload(value, depth = 0) {
     /** @type {Record<string, unknown>} */
     const out = {};
     for (const [key, val] of Object.entries(value)) {
-        if (SENSITIVE_KEY.test(key) || SENSITIVE_SUBSTR.test(key)) {
+        if (
+            (SENSITIVE_KEY.test(key) || SENSITIVE_SUBSTR.test(key)) &&
+            !KEEP_TOKEN_COUNTS.test(key)
+        ) {
             out[key] = "[redacted]";
             continue;
         }

@@ -209,5 +209,18 @@ describe("hook process against a live ingest listener", () => {
         expect(sanitizePayload({ content: "secret" })).toEqual({
             content: "[redacted]",
         });
+        expect(
+            sanitizePayload({
+                access_token: "leak",
+                refresh_token: "also",
+                sessionToken: "nope",
+                input_tokens: 12,
+            }),
+        ).toEqual({
+            access_token: "[redacted]",
+            refresh_token: "[redacted]",
+            sessionToken: "[redacted]",
+            input_tokens: 12,
+        });
     });
 });

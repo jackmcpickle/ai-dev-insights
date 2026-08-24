@@ -139,13 +139,18 @@ export function createD1Store(db: D1Database): InsightsStore {
         async queryEvents(filter) {
             const clauses: string[] = [];
             const binds: Array<string | number> = [];
-            if (filter.branch) {
-                clauses.push("git_branch = ?");
-                binds.push(filter.branch);
-            }
-            if (filter.pr != null) {
-                clauses.push("pr_number = ?");
-                binds.push(filter.pr);
+            if (filter.branch && filter.pr != null) {
+                clauses.push("(git_branch = ? OR pr_number = ?)");
+                binds.push(filter.branch, filter.pr);
+            } else {
+                if (filter.branch) {
+                    clauses.push("git_branch = ?");
+                    binds.push(filter.branch);
+                }
+                if (filter.pr != null) {
+                    clauses.push("pr_number = ?");
+                    binds.push(filter.pr);
+                }
             }
             if (filter.user) {
                 clauses.push("user_email = ?");

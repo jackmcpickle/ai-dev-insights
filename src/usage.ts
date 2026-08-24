@@ -89,7 +89,7 @@ function hasTurnTokens(usage: UsageFields): boolean {
     );
 }
 
-/** One usage row per generation: prefer stop over afterAgentResponse. */
+/** One usage row per generation. Prefer stop when it has tokens, else any row with tokens. */
 export function selectTurnUsage(events: StoredEvent[]): StoredEvent[] {
     const byKey = new Map<string, StoredEvent[]>();
     for (const event of events) {
@@ -110,7 +110,13 @@ export function selectTurnUsage(events: StoredEvent[]): StoredEvent[] {
     const chosen: StoredEvent[] = [];
     for (const group of byKey.values()) {
         chosen.push(
-            group.find((event) => event.hook_event === "stop") ?? group[0],
+            group.find(
+                (event) =>
+                    event.hook_event === "stop" && hasTurnTokens(event.usage),
+            ) ??
+                group.find((event) => hasTurnTokens(event.usage)) ??
+                group.find((event) => event.hook_event === "stop") ??
+                group[0],
         );
     }
     return chosen;
@@ -233,8 +239,17 @@ export function matchesFilter(
     >,
     filter: EventFilter,
 ): boolean {
-    if (filter.branch && event.git_branch !== filter.branch) return false;
-    if (filter.pr != null && event.pr_number !== filter.pr) return false;
+    if (filter.branch && filter.pr != null) {
+        if (
+            event.git_branch !== filter.branch &&
+            event.pr_number !== filter.pr
+        ) {
+            return false;
+        }
+    } else {
+        if (filter.branch && event.git_branch !== filter.branch) return false;
+        if (filter.pr != null && event.pr_number !== filter.pr) return false;
+    }
     if (filter.user && event.user_email !== filter.user) return false;
     if (filter.repo && event.repo !== filter.repo) return false;
     if (filter.hook && event.hook_event !== filter.hook) return false;
