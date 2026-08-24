@@ -1,0 +1,30 @@
+{
+    "name": "ai-dev-insights",
+    "private": true,
+    "type": "module",
+    "description": "Capture Cursor agent hook events and summarize token/context use per PR.",
+    "scripts": {
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy",
+        "cf-typegen": "wrangler types",
+        "db:migrate:local": "wrangler d1 migrations apply ai-dev-insights --local",
+        "db:migrate": "wrangler d1 migrations apply ai-dev-insights --remote",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "hono": "^4.13.0"
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "^5.20260823.1",
+        "@types/node": "^22.15.0",
+        "typescript": "^5.9.0",
+        "vitest": "^3.2.0",
+        "wrangler": "^4.119.0"
+    },
+    "engines": {
+        "node": ">=20"
+    },
+    "packageManager": "pnpm@10.33.3"
+}

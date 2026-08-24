@@ -1,0 +1,13 @@
+{
+    "hook_event_name": "subagentStart",
+    "conversation_id": "conv-prompt-1",
+    "generation_id": "gen-prompt-1",
+    "model": "cursor-grok-4.6-high-fast",
+    "user_email": "dev@example.com",
+    "workspace_roots": ["/workspace"],
+    "subagent_id": "sub-1",
+    "subagent_type": "explore",
+    "task": "Find the ingest auth path",
+    "parent_conversation_id": "conv-prompt-1",
+    "git_branch": "cursor/agent-hooks-ingest-f9cb"
+}

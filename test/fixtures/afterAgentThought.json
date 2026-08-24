@@ -1,0 +1,11 @@
+{
+    "hook_event_name": "afterAgentThought",
+    "conversation_id": "conv-prompt-1",
+    "generation_id": "gen-prompt-1",
+    "model": "cursor-grok-4.6-high-fast",
+    "model_id": "grok-4.6",
+    "user_email": "dev@example.com",
+    "workspace_roots": ["/workspace"],
+    "text": "I should store whatever usage fields appear and not invent billed totals.",
+    "duration_ms": 1800
+}

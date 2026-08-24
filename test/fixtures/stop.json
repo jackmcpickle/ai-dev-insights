@@ -1,0 +1,19 @@
+{
+    "hook_event_name": "stop",
+    "conversation_id": "conv-prompt-1",
+    "generation_id": "gen-prompt-1",
+    "model": "cursor-grok-4.6-high-fast",
+    "model_id": "grok-4.6",
+    "model_params": [
+        { "id": "effort", "value": "high" },
+        { "id": "fast", "value": "true" }
+    ],
+    "user_email": "dev@example.com",
+    "workspace_roots": ["/workspace"],
+    "status": "completed",
+    "loop_count": 0,
+    "input_tokens": 1180993,
+    "output_tokens": 8146,
+    "cache_read_tokens": 1007022,
+    "cache_write_tokens": 173957
+}

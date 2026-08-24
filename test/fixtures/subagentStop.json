@@ -1,0 +1,15 @@
+{
+    "hook_event_name": "subagentStop",
+    "conversation_id": "conv-prompt-1",
+    "generation_id": "gen-prompt-1",
+    "model": "cursor-grok-4.6-high-fast",
+    "user_email": "dev@example.com",
+    "workspace_roots": ["/workspace"],
+    "subagent_type": "explore",
+    "status": "completed",
+    "task": "Find the ingest auth path",
+    "summary": "Auth is a shared bearer token on /v1/*.",
+    "duration_ms": 12000,
+    "message_count": 4,
+    "tool_call_count": 3
+}
