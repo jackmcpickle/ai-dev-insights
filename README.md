@@ -45,9 +45,21 @@ curl -sS -H "Authorization: Bearer $INGEST_TOKEN" \
 # markdown used by the GitHub Action
 curl -sS -H "Authorization: Bearer $INGEST_TOKEN" \
   "$INGEST_URL/v1/usage/comment?branch=feat/usage&pr=12"
+
+# paginated export for a skill (also: hook, conversation_id, user, since, until)
+curl -sS -H "Authorization: Bearer $INGEST_TOKEN" \
+  "$INGEST_URL/v1/events?repo=jackmcpickle/ai-dev-insights&limit=100"
+
+# compact corpus digest (prefer this over a raw dump)
+curl -sS -H "Authorization: Bearer $INGEST_TOKEN" \
+  "$INGEST_URL/v1/digest?repo=jackmcpickle/ai-dev-insights"
 ```
 
 Open `/?token=...` for a small HTML table of the same aggregates.
+
+## Insights skill
+
+`/agent-insights` (or "run insights") fetches the digest, clusters retries / failures / high-token PRs / corrections / missed skills / copy-paste recipes, and proposes skill edits plus code hotspots. It does not apply those edits. How to run it locally and in cloud: [docs/agent-insights.md](docs/agent-insights.md).
 
 ## Deploy
 
@@ -89,4 +101,4 @@ Copy the PR workflow if you want the comment. Details: [docs/team-rollout.md](do
 pnpm test
 ```
 
-A fixture through `ingest.mjs` must POST, a valid token must persist the event, and `/v1/usage` must summarize that branch.
+A fixture through `ingest.mjs` must POST, a valid token must persist the event, `/v1/usage` must summarize that branch, and `/v1/digest` plus the insights pass must cluster the fixture corpus.

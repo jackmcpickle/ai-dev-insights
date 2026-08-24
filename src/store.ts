@@ -1,10 +1,10 @@
 import { matchesFilter } from "./usage";
 import type {
+    EventFilter,
     IngestPayload,
     InsightsStore,
     StoredEvent,
     UsageFields,
-    UsageFilter,
 } from "./types";
 
 interface EventRow {
@@ -83,7 +83,11 @@ function rowToEvent(row: EventRow): StoredEvent {
 export function createD1Store(db: D1Database): InsightsStore {
     return {
         async insertEvent(event) {
-            const receivedAt = Date.now();
+            const receivedAt =
+                typeof event.received_at === "number" &&
+                Number.isFinite(event.received_at)
+                    ? Math.floor(event.received_at)
+                    : Date.now();
             const workspace = event.workspace_roots[0] ?? null;
             const result = await db
                 .prepare(
@@ -151,12 +155,33 @@ export function createD1Store(db: D1Database): InsightsStore {
                 clauses.push("repo = ?");
                 binds.push(filter.repo);
             }
+            if (filter.hook) {
+                clauses.push("hook_event = ?");
+                binds.push(filter.hook);
+            }
+            if (filter.conversation_id) {
+                clauses.push("conversation_id = ?");
+                binds.push(filter.conversation_id);
+            }
+            if (filter.since != null) {
+                clauses.push("received_at >= ?");
+                binds.push(filter.since);
+            }
+            if (filter.until != null) {
+                clauses.push("received_at <= ?");
+                binds.push(filter.until);
+            }
+            if (filter.after_id != null) {
+                clauses.push("id > ?");
+                binds.push(filter.after_id);
+            }
             const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+            const limit = filter.limit ?? 5000;
             const rows = await db
                 .prepare(
-                    `SELECT * FROM events ${where} ORDER BY received_at DESC LIMIT 5000`,
+                    `SELECT * FROM events ${where} ORDER BY id ASC LIMIT ?`,
                 )
-                .bind(...binds)
+                .bind(...binds, limit)
                 .all<EventRow>();
             return (rows.results ?? []).map(rowToEvent);
         },
@@ -169,17 +194,26 @@ export function createMemoryStore(): InsightsStore & { events: StoredEvent[] } {
     return {
         events,
         async insertEvent(event: IngestPayload) {
+            const receivedAt =
+                typeof event.received_at === "number" &&
+                Number.isFinite(event.received_at)
+                    ? Math.floor(event.received_at)
+                    : Date.now();
             const row: StoredEvent = {
                 ...event,
                 id: nextId,
-                received_at: Date.now(),
+                received_at: receivedAt,
             };
             nextId += 1;
             events.push(row);
             return row;
         },
-        async queryEvents(filter: UsageFilter) {
-            return events.filter((event) => matchesFilter(event, filter));
+        async queryEvents(filter: EventFilter) {
+            const limit = filter.limit ?? 5000;
+            return events
+                .filter((event) => matchesFilter(event, filter))
+                .sort((a, b) => a.id - b.id)
+                .slice(0, limit);
         },
     };
 }

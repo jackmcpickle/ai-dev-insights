@@ -1,4 +1,5 @@
 import type {
+    EventFilter,
     IngestPayload,
     StoredEvent,
     UsageBucket,
@@ -221,14 +222,31 @@ function buildGroups(
 export function matchesFilter(
     event: Pick<
         StoredEvent,
-        "git_branch" | "pr_number" | "user_email" | "repo"
+        | "git_branch"
+        | "pr_number"
+        | "user_email"
+        | "repo"
+        | "hook_event"
+        | "conversation_id"
+        | "received_at"
+        | "id"
     >,
-    filter: UsageFilter,
+    filter: EventFilter,
 ): boolean {
     if (filter.branch && event.git_branch !== filter.branch) return false;
     if (filter.pr != null && event.pr_number !== filter.pr) return false;
     if (filter.user && event.user_email !== filter.user) return false;
     if (filter.repo && event.repo !== filter.repo) return false;
+    if (filter.hook && event.hook_event !== filter.hook) return false;
+    if (
+        filter.conversation_id &&
+        event.conversation_id !== filter.conversation_id
+    ) {
+        return false;
+    }
+    if (filter.since != null && event.received_at < filter.since) return false;
+    if (filter.until != null && event.received_at > filter.until) return false;
+    if (filter.after_id != null && event.id <= filter.after_id) return false;
     return true;
 }
 

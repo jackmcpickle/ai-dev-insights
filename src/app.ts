@@ -2,8 +2,17 @@ import { Hono } from "hono";
 import { isAuthorized } from "./auth";
 import { formatPrComment } from "./comment";
 import { renderDashboard } from "./dashboard";
+import { buildDigest } from "./digest";
+import {
+    DIGEST_EVENT_CAP,
+    EXPORT_DEFAULT_LIMIT,
+    nextCursor,
+    parseEventFilter,
+    toExportEvent,
+} from "./export";
+import { runInsightsPass } from "./insights";
 import { createD1Store } from "./store";
-import type { InsightsStore, UsageFilter } from "./types";
+import type { InsightsStore } from "./types";
 import { isIngestPayload, summarizeEvents } from "./usage";
 
 export type AppEnv = {
@@ -12,22 +21,6 @@ export type AppEnv = {
 };
 
 const MAX_BODY_BYTES = 256_000;
-
-function parseFilter(url: URL): UsageFilter {
-    const filter: UsageFilter = {};
-    const branch = url.searchParams.get("branch");
-    const user = url.searchParams.get("user");
-    const repo = url.searchParams.get("repo");
-    const prRaw = url.searchParams.get("pr");
-    if (branch) filter.branch = branch;
-    if (user) filter.user = user;
-    if (repo) filter.repo = repo;
-    if (prRaw) {
-        const pr = Number(prRaw);
-        if (Number.isFinite(pr) && pr > 0) filter.pr = Math.floor(pr);
-    }
-    return filter;
-}
 
 export function createApp(opts?: { store?: InsightsStore }): Hono<AppEnv> {
     const app = new Hono<AppEnv>();
@@ -94,20 +87,31 @@ export function createApp(opts?: { store?: InsightsStore }): Hono<AppEnv> {
             text: body.text ?? null,
             usage: body.usage ?? {},
             payload: body.payload ?? {},
+            received_at:
+                typeof body.received_at === "number" &&
+                Number.isFinite(body.received_at)
+                    ? Math.floor(body.received_at)
+                    : undefined,
         });
 
         return c.json({ ok: true, id: stored.id });
     });
 
     app.get("/v1/usage", async (c) => {
-        const filter = parseFilter(new URL(c.req.url));
-        const events = await c.get("store").queryEvents(filter);
+        const filter = parseEventFilter(new URL(c.req.url));
+        const events = await c.get("store").queryEvents({
+            ...filter,
+            limit: DIGEST_EVENT_CAP,
+        });
         return c.json(summarizeEvents(events, filter));
     });
 
     app.get("/v1/usage/comment", async (c) => {
-        const filter = parseFilter(new URL(c.req.url));
-        const events = await c.get("store").queryEvents(filter);
+        const filter = parseEventFilter(new URL(c.req.url));
+        const events = await c.get("store").queryEvents({
+            ...filter,
+            limit: DIGEST_EVENT_CAP,
+        });
         const report = summarizeEvents(events, filter);
         return c.json({
             markdown: formatPrComment(report),
@@ -115,9 +119,44 @@ export function createApp(opts?: { store?: InsightsStore }): Hono<AppEnv> {
         });
     });
 
+    app.get("/v1/events", async (c) => {
+        const filter = parseEventFilter(new URL(c.req.url));
+        const limit = filter.limit ?? EXPORT_DEFAULT_LIMIT;
+        const events = await c.get("store").queryEvents({ ...filter, limit });
+        return c.json({
+            events: events.map(toExportEvent),
+            next_cursor: nextCursor(events, limit),
+            limit,
+        });
+    });
+
+    app.get("/v1/digest", async (c) => {
+        const filter = parseEventFilter(new URL(c.req.url));
+        const events = await c.get("store").queryEvents({
+            ...filter,
+            limit: DIGEST_EVENT_CAP,
+        });
+        return c.json(buildDigest(events, filter));
+    });
+
+    app.get("/v1/insights", async (c) => {
+        const filter = parseEventFilter(new URL(c.req.url));
+        const events = await c.get("store").queryEvents({
+            ...filter,
+            limit: DIGEST_EVENT_CAP,
+        });
+        return c.json({
+            digest: buildDigest(events, filter),
+            insights: runInsightsPass(events),
+        });
+    });
+
     app.get("/", async (c) => {
-        const filter = parseFilter(new URL(c.req.url));
-        const events = await c.get("store").queryEvents(filter);
+        const filter = parseEventFilter(new URL(c.req.url));
+        const events = await c.get("store").queryEvents({
+            ...filter,
+            limit: DIGEST_EVENT_CAP,
+        });
         return c.html(renderDashboard(summarizeEvents(events, filter)));
     });
 

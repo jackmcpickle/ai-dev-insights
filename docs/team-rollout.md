@@ -62,3 +62,7 @@ One shared bearer token (`INGEST_TOKEN`). Send it as `Authorization: Bearer …`
 ## PR comments
 
 The workflow posts or updates a single comment marked `<!-- ai-dev-insights -->`. It keys usage by head branch, PR number, and `owner/repo`. If the ingest URL is unset, the job exits 0 and leaves the PR alone.
+
+## Insights over the corpus
+
+After traffic is flowing, run `/agent-insights` against production. See [docs/agent-insights.md](agent-insights.md). The observe hooks stay fail-open; the skill only reads.
