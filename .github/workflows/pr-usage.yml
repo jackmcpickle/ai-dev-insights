@@ -1,0 +1,27 @@
+name: PR AI usage
+
+on:
+    pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    comment:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check out repo
+              uses: actions/checkout@v4
+
+            - name: Comment usage
+              env:
+                  AI_DEV_INSIGHTS_URL: ${{ secrets.AI_DEV_INSIGHTS_URL }}
+                  AI_DEV_INSIGHTS_TOKEN: ${{ secrets.AI_DEV_INSIGHTS_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_REPOSITORY: ${{ github.repository }}
+                  PR_HEAD_REF: ${{ github.head_ref }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+              run: node scripts/comment-pr-usage.mjs

@@ -1,0 +1,26 @@
+{
+    "version": 1,
+    "hooks": {
+        "beforeSubmitPrompt": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ],
+        "afterAgentResponse": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ],
+        "afterAgentThought": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ],
+        "stop": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ],
+        "preCompact": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ],
+        "subagentStart": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ],
+        "subagentStop": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ]
+    }
+}

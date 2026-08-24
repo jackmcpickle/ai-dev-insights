@@ -1,0 +1,16 @@
+{
+    "hook_event_name": "preCompact",
+    "conversation_id": "conv-prompt-1",
+    "generation_id": "gen-prompt-1",
+    "model": "cursor-grok-4.6-high-fast",
+    "model_id": "grok-4.6",
+    "user_email": "dev@example.com",
+    "workspace_roots": ["/workspace"],
+    "trigger": "auto",
+    "context_usage_percent": 85,
+    "context_tokens": 120000,
+    "context_window_size": 128000,
+    "message_count": 45,
+    "messages_to_compact": 30,
+    "is_first_compaction": true
+}

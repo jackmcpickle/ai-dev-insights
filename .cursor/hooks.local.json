@@ -1,0 +1,11 @@
+{
+    "version": 1,
+    "hooks": {
+        "sessionStart": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ],
+        "sessionEnd": [
+            { "command": "node .cursor/hooks/ingest.mjs", "timeout": 8 }
+        ]
+    }
+}

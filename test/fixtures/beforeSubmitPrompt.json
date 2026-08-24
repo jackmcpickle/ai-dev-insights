@@ -1,0 +1,12 @@
+{
+    "hook_event_name": "beforeSubmitPrompt",
+    "conversation_id": "conv-prompt-1",
+    "generation_id": "gen-prompt-1",
+    "model": "cursor-grok-4.6-high-fast",
+    "model_id": "grok-4.6",
+    "user_email": "dev@example.com",
+    "workspace_roots": ["/workspace"],
+    "cursor_version": "1.7.2",
+    "prompt": "Summarize token use on this PR",
+    "attachments": [{ "type": "file", "file_path": "/workspace/README.md" }]
+}

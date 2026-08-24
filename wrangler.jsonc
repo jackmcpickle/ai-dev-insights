@@ -1,0 +1,28 @@
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "ai-dev-insights",
+    "main": "src/index.ts",
+    "account_id": "16a04bbc76ee5eccbcc1d6c39bc9a797",
+    "compatibility_date": "2026-08-24",
+    "compatibility_flags": ["nodejs_compat"],
+    "workers_dev": true,
+    "preview_urls": true,
+    "observability": {
+        "enabled": true,
+        "logs": {
+            "enabled": true,
+            "invocation_logs": true,
+            "head_sampling_rate": 1
+        }
+    },
+    "d1_databases": [
+        {
+            "binding": "DB",
+            "database_name": "ai-dev-insights",
+            // Replace after `wrangler d1 create ai-dev-insights`.
+            "database_id": "00000000-0000-0000-0000-000000000000",
+            "preview_database_id": "local-ai-dev-insights",
+            "migrations_dir": "migrations"
+        }
+    ]
+}
