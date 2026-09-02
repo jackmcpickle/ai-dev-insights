@@ -1,33 +1,58 @@
 import type { UsageBucket, UsageReport } from "./types";
 
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;");
-}
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 
-function cell(value: string | number | null | undefined): string {
-    if (value == null || value === "") return "<td>—</td>";
-    return `<td>${escapeHtml(String(value))}</td>`;
-}
+const cell = (value: string | number | null | undefined): string => {
+  if (value === null || value === undefined || value === "") {
+    return "<td>—</td>";
+  }
+  return `<td>${escapeHtml(String(value))}</td>`;
+};
 
-function rows(buckets: UsageBucket[], kind: "pr" | "branch" | "user"): string {
-    if (buckets.length === 0) {
-        return `<tr><td colspan="10">No events yet.</td></tr>`;
+const bucketLabel = (
+  bucket: UsageBucket,
+  kind: "pr" | "branch" | "user"
+): string | null | undefined => {
+  if (kind === "user") {
+    return bucket.user_email;
+  }
+  if (kind === "pr") {
+    if (bucket.pr_number === null || bucket.pr_number === undefined) {
+      return bucket.git_branch;
     }
-    return buckets
-        .map((bucket) => {
-            const label =
-                kind === "user"
-                    ? bucket.user_email
-                    : kind === "pr"
-                      ? bucket.pr_number != null
-                          ? `#${bucket.pr_number}`
-                          : bucket.git_branch
-                      : bucket.git_branch;
-            return `<tr>
+    return `#${bucket.pr_number}`;
+  }
+  return bucket.git_branch;
+};
+
+const cacheCell = (bucket: UsageBucket): string | null => {
+  if (
+    (bucket.cache_read_tokens === null ||
+      bucket.cache_read_tokens === undefined) &&
+    (bucket.cache_write_tokens === null ||
+      bucket.cache_write_tokens === undefined)
+  ) {
+    return null;
+  }
+  return `${bucket.cache_read_tokens ?? 0} / ${bucket.cache_write_tokens ?? 0}`;
+};
+
+const rows = (
+  buckets: UsageBucket[],
+  kind: "pr" | "branch" | "user"
+): string => {
+  if (buckets.length === 0) {
+    return `<tr><td colspan="10">No events yet.</td></tr>`;
+  }
+  return buckets
+    .map((bucket) => {
+      const label = bucketLabel(bucket, kind);
+      return `<tr>
                 ${cell(label)}
                 ${cell(bucket.repo)}
                 ${cell(bucket.event_count)}
@@ -35,23 +60,31 @@ function rows(buckets: UsageBucket[], kind: "pr" | "branch" | "user"): string {
                 ${cell(bucket.stop_count)}
                 ${cell(bucket.input_tokens)}
                 ${cell(bucket.output_tokens)}
-                ${cell(
-                    bucket.cache_read_tokens == null &&
-                        bucket.cache_write_tokens == null
-                        ? null
-                        : `${bucket.cache_read_tokens ?? 0} / ${bucket.cache_write_tokens ?? 0}`,
-                )}
+                ${cell(cacheCell(bucket))}
                 ${cell(bucket.max_context_tokens)}
                 ${cell(bucket.turns_missing_token_fields)}
             </tr>`;
-        })
-        .join("");
-}
+    })
+    .join("");
+};
 
-function table(title: string, buckets: UsageBucket[], kind: "pr" | "branch" | "user"): string {
-    const first =
-        kind === "user" ? "User" : kind === "pr" ? "PR" : "Branch";
-    return `
+const tableHeader = (kind: "pr" | "branch" | "user"): string => {
+  if (kind === "user") {
+    return "User";
+  }
+  if (kind === "pr") {
+    return "PR";
+  }
+  return "Branch";
+};
+
+const table = (
+  title: string,
+  buckets: UsageBucket[],
+  kind: "pr" | "branch" | "user"
+): string => {
+  const first = tableHeader(kind);
+  return `
         <section>
             <h2>${escapeHtml(title)}</h2>
             <table>
@@ -72,10 +105,10 @@ function table(title: string, buckets: UsageBucket[], kind: "pr" | "branch" | "u
                 <tbody>${rows(buckets, kind)}</tbody>
             </table>
         </section>`;
-}
+};
 
-export function renderDashboard(report: UsageReport): string {
-    return `<!doctype html>
+export const renderDashboard = (report: UsageReport): string =>
+  `<!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -111,4 +144,3 @@ export function renderDashboard(report: UsageReport): string {
     <p class="note">${escapeHtml(report.note)}</p>
 </body>
 </html>`;
-}

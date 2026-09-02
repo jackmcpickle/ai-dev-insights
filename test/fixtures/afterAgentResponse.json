@@ -1,14 +1,14 @@
 {
-    "hook_event_name": "afterAgentResponse",
-    "conversation_id": "conv-prompt-1",
-    "generation_id": "gen-prompt-1",
-    "model": "cursor-grok-4.6-high-fast",
-    "model_id": "grok-4.6",
-    "user_email": "dev@example.com",
-    "workspace_roots": ["/workspace"],
-    "text": "Hook events persisted. Usage is summarized per branch.",
-    "input_tokens": 1180993,
-    "output_tokens": 8146,
-    "cache_read_tokens": 1007022,
-    "cache_write_tokens": 173957
+  "hook_event_name": "afterAgentResponse",
+  "conversation_id": "conv-prompt-1",
+  "generation_id": "gen-prompt-1",
+  "model": "cursor-grok-4.6-high-fast",
+  "model_id": "grok-4.6",
+  "user_email": "dev@example.com",
+  "workspace_roots": ["/workspace"],
+  "text": "Hook events persisted. Usage is summarized per branch.",
+  "input_tokens": 1180993,
+  "output_tokens": 8146,
+  "cache_read_tokens": 1007022,
+  "cache_write_tokens": 173957
 }

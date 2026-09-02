@@ -1,10 +1,10 @@
 {
-    "hook_event_name": "beforeReadFile",
-    "conversation_id": "conv-prompt-1",
-    "generation_id": "gen-prompt-1",
-    "model": "cursor-grok-4.6-high-fast",
-    "user_email": "dev@example.com",
-    "file_path": "/workspace/.dev.vars",
-    "content": "INGEST_TOKEN=super-secret-value\nAPI_KEY=also-secret",
-    "authorization": "Bearer should-not-leak"
+  "hook_event_name": "beforeReadFile",
+  "conversation_id": "conv-prompt-1",
+  "generation_id": "gen-prompt-1",
+  "model": "cursor-grok-4.6-high-fast",
+  "user_email": "dev@example.com",
+  "file_path": "/workspace/.dev.vars",
+  "content": "INGEST_TOKEN=super-secret-value\nAPI_KEY=also-secret",
+  "authorization": "Bearer should-not-leak"
 }

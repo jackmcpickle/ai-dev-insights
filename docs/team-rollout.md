@@ -42,7 +42,7 @@ Priority is Enterprise → Team → Project → User. All matching hooks run. Th
 
 ## Cloud vs local
 
-| | Cloud agent | Local IDE |
+|  | Cloud agent | Local IDE |
 | --- | --- | --- |
 | Project `.cursor/hooks.json` | Yes, once the VM is writable | Yes, in a trusted workspace |
 | `~/.cursor/hooks.json` | No | Yes |

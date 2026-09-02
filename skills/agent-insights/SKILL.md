@@ -64,14 +64,17 @@ Same rule as reflect: present the report and wait. Skill edits change every futu
 
 ```markdown
 ## Proposed skill edits
+
 - Edit `skills/<name>/SKILL.md`: …
 - Tune description: `skills/<name>/SKILL.md` (it exists but did not fire)
 - New skill: `<kebab-name>` (only if no existing skill is a home and the pattern recurs)
 
 ## Code-area hotspots
+
 - `path` or PR: why it wastes tokens or fails, with conversation ids
 
 ## Do not change
+
 - One-offs, missing token fields, fail-open hooks, anything you cannot cite
 ```
 
