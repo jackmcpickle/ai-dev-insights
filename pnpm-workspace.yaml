@@ -1,0 +1,9 @@
+allowBuilds:
+  esbuild: true
+  workerd: true
+audit:
+  level: high
+trustPolicyIgnoreAfter: 129600
+trustPolicy: no-downgrade
+verifyDepsBeforeRun: error
+registry: https://registry.npmjs.org
