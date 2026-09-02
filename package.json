@@ -1,30 +1,35 @@
 {
-    "name": "ai-dev-insights",
-    "private": true,
-    "type": "module",
-    "description": "Capture Cursor agent hook events and summarize token/context use per PR.",
-    "scripts": {
-        "dev": "wrangler dev",
-        "deploy": "wrangler deploy",
-        "cf-typegen": "wrangler types",
-        "db:migrate:local": "wrangler d1 migrations apply ai-dev-insights --local",
-        "db:migrate": "wrangler d1 migrations apply ai-dev-insights --remote",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "typecheck": "tsc --noEmit"
-    },
-    "dependencies": {
-        "hono": "^4.13.5"
-    },
-    "devDependencies": {
-        "@cloudflare/workers-types": "^5.20260901.1",
-        "@types/node": "^26.4.1",
-        "typescript": "^7.0.2",
-        "vitest": "^4.1.11",
-        "wrangler": "^4.128.0"
-    },
-    "engines": {
-        "node": ">=24"
-    },
-    "packageManager": "pnpm@11.24.0"
+  "name": "ai-dev-insights",
+  "private": true,
+  "description": "Capture Cursor agent hook events and summarize token/context use per PR.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply ai-dev-insights --local",
+    "db:migrate": "wrangler d1 migrations apply ai-dev-insights --remote",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "hono": "^4.13.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260901.1",
+    "@types/node": "^26.4.1",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
+    "typescript": "^7.0.2",
+    "ultracite": "7.10.7",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.128.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.24.0"
 }
