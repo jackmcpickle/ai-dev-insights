@@ -63,6 +63,15 @@ Open `/?token=...` for usage tables and `/insights?token=...` for the determinis
 
 ## Deploy
 
+**CI (main):** after Test passes, the Deploy workflow runs `pnpm db:migrate` then `pnpm deploy`. Set these GitHub repo secrets:
+
+- `CLOUDFLARE_API_TOKEN` — API token with Workers Scripts Edit + D1 Edit
+- `CLOUDFLARE_ACCOUNT_ID` — `16a04bbc76ee5eccbcc1d6c39bc9a797` (Mcpickle)
+
+If Cloudflare Workers Builds also deploys from GitHub, disable it or accept double deploys; migrations must run before the Worker serves traffic.
+
+**Manual:**
+
 ```bash
 pnpm install
 npx wrangler d1 create ai-dev-insights
