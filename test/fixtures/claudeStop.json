@@ -1,0 +1,7 @@
+{
+  "session_id": "claude-session-1",
+  "hook_event_name": "Stop",
+  "cwd": "/Users/dev/ai-dev-insights",
+  "last_assistant_message": "Added Claude Code hooks and an insights HTML page.",
+  "model": "claude-sonnet-4-20250514"
+}

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 
 import { isAuthorized } from "./auth";
 import { formatPrComment } from "./comment";
-import { renderDashboard } from "./dashboard";
+import { renderDashboard, renderInsightsPage } from "./dashboard";
 import { buildDigest } from "./digest";
 import {
   DIGEST_EVENT_CAP,
@@ -108,6 +108,17 @@ const registerReadRoutes = (app: Hono<AppEnv>): void => {
     });
     return c.html(renderDashboard(summarizeEvents(events, filter)));
   });
+
+  app.get("/insights", async (c) => {
+    const filter = parseEventFilter(new URL(c.req.url));
+    const events = await c.get("store").queryEvents({
+      ...filter,
+      limit: DIGEST_EVENT_CAP,
+    });
+    const digest = buildDigest(events, filter);
+    const insights = runInsightsPass(events);
+    return c.html(renderInsightsPage(digest, insights));
+  });
 };
 
 export const createApp = (opts?: { store?: InsightsStore }): Hono<AppEnv> => {
@@ -129,6 +140,10 @@ export const createApp = (opts?: { store?: InsightsStore }): Hono<AppEnv> => {
 
   app.use("/", async (c, next) => {
     if (c.req.method !== "GET") {
+      return await next();
+    }
+    const path = new URL(c.req.url).pathname;
+    if (path !== "/" && path !== "/insights") {
       return await next();
     }
     if (!isAuthorized(c.req.raw, c.env.INGEST_TOKEN)) {

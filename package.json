@@ -4,17 +4,18 @@
   "description": "Capture Cursor agent hook events and summarize token/context use per PR.",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --local",
     "deploy": "wrangler deploy",
     "cf-typegen": "wrangler types",
-    "db:migrate:local": "wrangler d1 migrations apply ai-dev-insights --local",
-    "db:migrate": "wrangler d1 migrations apply ai-dev-insights --remote",
+    "db:migrate:local": "wrangler d1 migrations apply dev-insights --local",
+    "db:migrate": "wrangler d1 migrations apply dev-insights --remote",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "setup:local": "bash scripts/setup-local.sh"
   },
   "dependencies": {
     "hono": "^4.13.5"

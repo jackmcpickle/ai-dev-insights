@@ -55,7 +55,7 @@ curl -sS -H "Authorization: Bearer $INGEST_TOKEN" \
   "$INGEST_URL/v1/digest?repo=jackmcpickle/ai-dev-insights"
 ```
 
-Open `/?token=...` for a small HTML table of the same aggregates.
+Open `/?token=...` for usage tables and `/insights?token=...` for the deterministic insights report. JSON equivalents: `GET /v1/usage`, `GET /v1/digest`, `GET /v1/insights`. Run `/agent-insights` in Cursor for a deeper skill/code proposal pass.
 
 ## Insights skill
 
@@ -75,14 +75,23 @@ pnpm deploy
 Local:
 
 ```bash
+pnpm setup:local   # hooks env, user hooks merge, local D1
+pnpm dev
+```
+
+Or manually:
+
+```bash
 cp .dev.vars.example .dev.vars
+cp .cursor/hooks.env.example .cursor/hooks.env
+./scripts/install-user-hooks.sh
 pnpm db:migrate:local
 pnpm dev
 ```
 
 ## Hooks in this repo
 
-`.cursor/hooks.json` points at `node .cursor/hooks/ingest.mjs`. The script reads JSON on stdin, adds git metadata, POSTs to `INGEST_URL` / `AI_DEV_INSIGHTS_URL`, and swallows errors.
+`.cursor/hooks.json` points at `node .cursor/hooks/ingest.mjs`. Claude Code uses `.claude/settings.json` with a fail-open wrapper. Hooks always exit 0; failures log to `.cursor/hooks.log` in the project (gitignored via `*.log`).
 
 Set the URL and token in `.cursor/hooks.env` (gitignored), `~/.ai-dev-insights.env`, or the process environment. Cloud agents need those names in the Cursor environment. They cannot see your home directory.
 
@@ -90,7 +99,8 @@ Set the URL and token in `.cursor/hooks.env` (gitignored), `~/.ai-dev-insights.e
 
 ```bash
 ./scripts/install-hooks.sh /path/to/other-repo
-./scripts/install-user-hooks.sh   # local IDE only
+./scripts/install-user-hooks.sh   # local Cursor IDE
+./scripts/install-claude-hooks.sh # local Claude Code (~/.claude)
 ```
 
 Copy the PR workflow if you want the comment. Details: [docs/team-rollout.md](docs/team-rollout.md).

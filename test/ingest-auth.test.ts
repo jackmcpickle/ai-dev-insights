@@ -301,6 +301,27 @@ describe("ingest auth", () => {
     expect(html).not.toContain("<script");
   });
 
+  it("returns HTML from the insights report route", async () => {
+    const store = createMemoryStore();
+    const app = createApp({ store });
+    await ingest(
+      app,
+      buildIngestPayload(loadFixture("beforeSubmitPrompt.json"), {
+        git_branch: "feat/usage",
+      })
+    );
+
+    const insightsRes = await app.request(
+      "/insights?branch=feat/usage",
+      { headers: { authorization: `Bearer ${TOKEN}` } },
+      env()
+    );
+    const html = await insightsRes.text();
+    expect(insightsRes.status).toBe(200);
+    expect(insightsRes.headers.get("content-type")).toContain("text/html");
+    expect(html).toMatch(/Insights report[\s\S]*Proposed skill changes/u);
+  });
+
   it("rejects invalid ingest payloads and oversized bodies", async () => {
     const app = createApp({ store: createMemoryStore() });
     const headers = {

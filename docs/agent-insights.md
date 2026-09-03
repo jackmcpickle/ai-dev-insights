@@ -28,7 +28,7 @@ pnpm db:migrate:local
 pnpm dev
 ```
 
-Point the skill at `http://127.0.0.1:8787` via `.cursor/hooks.env`. Seed with a fixture POST if you want a dry run:
+Point the skill at `http://127.0.0.1:8787` via `.cursor/hooks.env`. Browse usage at `http://127.0.0.1:8787/?token=dev-ingest-token` and the insights report at `http://127.0.0.1:8787/insights?token=dev-ingest-token`.
 
 ```bash
 curl -sS -X POST "$INGEST_URL/v1/ingest" \

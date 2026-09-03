@@ -30,9 +30,19 @@ Cloud hooks do not cover Cursor on a laptop. Install the same script into the us
 ./scripts/install-user-hooks.sh
 ```
 
-User hooks run from `~/.cursor`, so commands are `node ./hooks/ai-dev-insights.mjs`, not `.cursor/hooks/ingest.mjs`. If `~/.cursor/hooks.json` already exists, the script prints the snippet to merge.
+For Claude Code (all projects on your machine):
 
-`sessionStart` / `sessionEnd` are useful locally and do not run in cloud. See `.cursor/hooks.local.json` for the extra entries.
+```bash
+./scripts/install-claude-hooks.sh
+```
+
+Or run `pnpm setup:local` to wire Cursor, Claude, env files, and local D1 in one step.
+
+User hooks run from `~/.cursor`, so commands are `node ./hooks/ai-dev-insights.mjs`, not `.cursor/hooks/ingest.mjs`. If `~/.cursor/hooks.json` already exists, the script merges without clobbering.
+
+Claude Code project hooks live in `.claude/settings.json` (committed in this repo). User-wide Claude hooks merge into `~/.claude/settings.json`.
+
+`sessionStart` / `sessionEnd` are useful locally and do not run in cloud. See `.cursor/hooks.local.json` for the extra Cursor entries.
 
 ## Enterprise team hooks
 

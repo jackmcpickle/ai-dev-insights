@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createServer } from "node:http";
 import type { IncomingMessage } from "node:http";
 import path from "node:path";
@@ -11,6 +12,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildIngestPayload,
   inferPrNumber,
+  isClaudeHookEvent,
+  logHookWarning,
+  normalizeHookEventName,
   runHook,
   sanitizePayload,
 } from "../.cursor/hooks/ingest.mjs";
@@ -72,6 +76,32 @@ describe("hook stdin → payload mapping", () => {
     expect(thought.usage.duration_ms).toBe(1800);
   });
 
+  it("maps Claude UserPromptSubmit and Stop into canonical hook events", () => {
+    const prompt = buildIngestPayload(
+      loadFixture("claudeUserPromptSubmit.json"),
+      {
+        git_branch: "main",
+        repo: "jackmcpickle/ai-dev-insights",
+      }
+    );
+    expect(prompt).toMatchObject({
+      conversation_id: "claude-session-1",
+      hook_event: "beforeSubmitPrompt",
+      text: "Add Claude hook support to ai-dev-insights",
+    });
+    expect(normalizeHookEventName("UserPromptSubmit")).toBe("beforeSubmitPrompt");
+    expect(isClaudeHookEvent("UserPromptSubmit")).toBe(true);
+    expect(isClaudeHookEvent("beforeSubmitPrompt")).toBe(false);
+
+    const stop = buildIngestPayload(loadFixture("claudeStop.json"), {
+      git_branch: "main",
+    });
+    expect(stop).toMatchObject({
+      hook_event: "stop",
+      text: "Added Claude Code hooks and an insights HTML page.",
+    });
+  });
+
   it("redacts file contents and secret-looking keys", () => {
     const payload = buildIngestPayload(loadFixture("beforeReadFile.json"));
     const sanitized = payload.payload as Record<string, unknown>;
@@ -87,6 +117,48 @@ describe("hook stdin → payload mapping", () => {
       inferPrNumber({ branch: "cursor/agent-hooks-ingest-f9cb" })
     ).toBeNull();
     expect(inferPrNumber({ branch: "main", explicit: "18" })).toBe(18);
+  });
+
+  it("logs ingest failures to .cursor/hooks.log and stays silent for Claude", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "ai-dev-insights-hook-"));
+    const logPath = path.join(dir, ".cursor/hooks.log");
+    let stdout = "";
+
+    await runHook({
+      env: {
+        CLAUDE_PROJECT_DIR: dir,
+        INGEST_TOKEN: "test-token",
+        INGEST_URL: "https://insights.test",
+      },
+      fetchImpl: (() => {
+        throw new Error("offline");
+      }) as typeof fetch,
+      readStdin: () =>
+        Promise.resolve(JSON.stringify(loadFixture("claudeStop.json"))),
+      resolveGit: () => ({
+        git_branch: "main",
+        repo: "jackmcpickle/ai-dev-insights",
+        workspace_root: dir,
+      }),
+      write: (text) => {
+        stdout += text;
+      },
+    });
+
+    expect(stdout).toBe("");
+    expect(readFileSync(logPath, "utf-8")).toContain(
+      "ingest failed for stop: offline"
+    );
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("writes hook warnings to the project log file", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "ai-dev-insights-log-"));
+    logHookWarning(dir, "test warning");
+    expect(readFileSync(path.join(dir, ".cursor/hooks.log"), "utf-8")).toContain(
+      "test warning"
+    );
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("POSTs the mapped payload and still prints {} when the network fails", async () => {

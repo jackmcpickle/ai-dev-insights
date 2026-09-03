@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 /**
- * Fail-open Cursor hook. Reads one JSON event on stdin, POSTs it to the
- * ingest API, then always prints `{}` and exits 0.
- *
- * Cloud agents only load project hooks (this file via `.cursor/hooks.json`).
- * User-level `~/.cursor` hooks never run in cloud.
+ * Fail-open agent hook for Cursor and Claude Code. Reads one JSON event on stdin,
+ * POSTs it to the ingest API, then exits 0. Cursor hooks print `{}`; Claude hooks
+ * stay silent so stdout is not injected into the session.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { stdin } from "node:process";
@@ -61,6 +59,30 @@ export const asString = function asString(value) {
     return String(value);
   }
   return null;
+};
+
+/** @type {Record<string, string>} */
+export const CLAUDE_EVENT_MAP = {
+  PreCompact: "preCompact",
+  SessionEnd: "sessionEnd",
+  SessionStart: "sessionStart",
+  Stop: "stop",
+  StopFailure: "stop",
+  SubagentStart: "subagentStart",
+  SubagentStop: "subagentStop",
+  UserPromptSubmit: "beforeSubmitPrompt",
+};
+
+/** @param {string | null | undefined} raw - Raw hook event name from the agent. */
+export const normalizeHookEventName = function normalizeHookEventName(raw) {
+  const name = asString(raw) ?? "unknown";
+  return CLAUDE_EVENT_MAP[name] ?? name;
+};
+
+/** @param {string | null | undefined} raw - Raw hook event name from the agent. */
+export const isClaudeHookEvent = function isClaudeHookEvent(raw) {
+  const name = asString(raw);
+  return name !== null && Object.hasOwn(CLAUDE_EVENT_MAP, name);
 };
 
 /** @param {unknown} value - Value to coerce into a finite number. */
@@ -189,9 +211,10 @@ export const extractUsage = function extractUsage(event) {
 /**
  * @param {Record<string, unknown>} event - Hook event payload.
  * @param {string} hookEvent - Normalized hook event name.
+ * @param {string} rawHookEvent - Raw hook event name from the agent.
  */
-const pickText = function pickText(event, hookEvent) {
-  if (hookEvent === "beforeSubmitPrompt") {
+const pickText = function pickText(event, hookEvent, rawHookEvent) {
+  if (hookEvent === "beforeSubmitPrompt" || rawHookEvent === "UserPromptSubmit") {
     return asString(event.prompt);
   }
   if (hookEvent === "afterAgentResponse" || hookEvent === "afterAgentThought") {
@@ -200,8 +223,15 @@ const pickText = function pickText(event, hookEvent) {
   if (hookEvent === "subagentStart") {
     return asString(event.task);
   }
-  if (hookEvent === "subagentStop") {
-    return asString(event.summary) ?? asString(event.task);
+  if (hookEvent === "subagentStop" || rawHookEvent === "SubagentStop") {
+    return (
+      asString(event.summary) ??
+      asString(event.last_assistant_message) ??
+      asString(event.task)
+    );
+  }
+  if (hookEvent === "stop" || rawHookEvent === "Stop" || rawHookEvent === "StopFailure") {
+    return asString(event.text) ?? asString(event.last_assistant_message);
   }
   return (
     asString(event.text) ?? asString(event.prompt) ?? asString(event.summary)
@@ -249,8 +279,9 @@ export const buildIngestPayload = function buildIngestPayload(
   extras = {}
 ) {
   const event = asRecord(raw) ?? {};
-  const hookEvent =
+  const rawHookEvent =
     asString(event.hook_event_name) ?? asString(extras.hook_event) ?? "unknown";
+  const hookEvent = normalizeHookEventName(rawHookEvent);
   const branch =
     asString(event.git_branch) ?? asString(extras.git_branch) ?? null;
   const repo = asString(event.repo) ?? asString(extras.repo) ?? null;
@@ -264,6 +295,15 @@ export const buildIngestPayload = function buildIngestPayload(
       (item) => typeof item === "string"
     );
   }
+  const cwd = asString(event.cwd);
+  if (workspaceRoots.length === 0 && cwd) {
+    workspaceRoots = [cwd];
+  }
+
+  const status =
+    rawHookEvent === "StopFailure"
+      ? (asString(event.error) ?? "error")
+      : (asString(event.status) ?? asString(event.reason));
 
   return {
     conversation_id:
@@ -280,10 +320,10 @@ export const buildIngestPayload = function buildIngestPayload(
       explicit: event.pr_number ?? extras.pr_number,
     }),
     repo,
-    status: asString(event.status) ?? asString(event.reason),
-    subagent_id: asString(event.subagent_id),
-    subagent_type: asString(event.subagent_type),
-    text: truncate(pickText(event, hookEvent)),
+    status,
+    subagent_id: asString(event.subagent_id) ?? asString(event.agent_id),
+    subagent_type: asString(event.subagent_type) ?? asString(event.agent_type),
+    text: truncate(pickText(event, hookEvent, rawHookEvent)),
     usage: extractUsage(event),
     user_email: asString(event.user_email) ?? asString(extras.user_email),
     workspace_roots: workspaceRoots,
@@ -319,12 +359,50 @@ export const loadEnvFile = function loadEnvFile(envPath) {
   return out;
 };
 
+/** @param {NodeJS.ProcessEnv} [env] - Process environment. */
+export const resolveProjectRoot = function resolveProjectRoot(
+  env = process.env,
+  roots = []
+) {
+  const listed = roots.find((root) => typeof root === "string" && root);
+  return (
+    (typeof listed === "string" ? listed : null) ??
+    env.CURSOR_PROJECT_DIR ??
+    env.CLAUDE_PROJECT_DIR ??
+    process.cwd()
+  );
+};
+
+/**
+ * @param {string} projectRoot - Project directory for the log file.
+ * @param {string} message - Warning text (no secrets).
+ */
+export const logHookWarning = function logHookWarning(projectRoot, message) {
+  try {
+    const logDir = resolve(projectRoot, ".cursor");
+    const logPath = resolve(logDir, "hooks.log");
+    mkdirSync(logDir, { recursive: true });
+    appendFileSync(
+      logPath,
+      `${new Date().toISOString()} ai-dev-insights: ${message}\n`,
+      "utf-8"
+    );
+  } catch {
+    // ignore log failures
+  }
+};
+
 /** @param {NodeJS.ProcessEnv} [env] - Process environment to merge with hook env files. */
 export const resolveIngestConfig = function resolveIngestConfig(
   env = process.env
 ) {
   const files = [
-    resolve(env.CURSOR_PROJECT_DIR ?? process.cwd(), ".cursor/hooks.env"),
+    resolve(
+      env.CURSOR_PROJECT_DIR ??
+        env.CLAUDE_PROJECT_DIR ??
+        process.cwd(),
+      ".cursor/hooks.env"
+    ),
     resolve(homedir(), ".ai-dev-insights.env"),
     resolve(homedir(), ".cursor/hooks.env"),
   ];
@@ -362,6 +440,7 @@ export const resolveGitContext = function resolveGitContext(roots = []) {
   const root =
     (typeof listed === "string" ? listed : null) ??
     process.env.CURSOR_PROJECT_DIR ??
+    process.env.CLAUDE_PROJECT_DIR ??
     process.cwd();
   const branch = git(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
   const remote = git(root, ["remote", "get-url", "origin"]);
@@ -416,6 +495,10 @@ export const runHook = async function runHook(opts = {}) {
   const read = opts.readStdin ?? readStdin;
   const fetchImpl = opts.fetchImpl ?? fetch;
   const write = opts.write ?? ((text) => process.stdout.write(text));
+  const env = opts.env ?? process.env;
+  /** @type {string | null} */
+  let rawHookEvent = null;
+  let projectRoot = resolveProjectRoot(env);
   try {
     const rawText = await read();
     let parsed = {};
@@ -427,32 +510,52 @@ export const runHook = async function runHook(opts = {}) {
       }
     }
     const event = asRecord(parsed) ?? {};
+    rawHookEvent = asString(event.hook_event_name);
+    const cwd = asString(event.cwd);
     const roots = Array.isArray(event.workspace_roots)
       ? event.workspace_roots
-      : [];
+      : cwd
+        ? [cwd]
+        : [];
     const gitContext = (opts.resolveGit ?? resolveGitContext)(roots);
+    projectRoot = gitContext.workspace_root ?? resolveProjectRoot(env, roots);
     const payload = buildIngestPayload(event, {
       ...gitContext,
-      pr_number: process.env.GITHUB_PR_NUMBER ?? null,
-      user_email: process.env.CURSOR_USER_EMAIL ?? null,
+      pr_number: env.GITHUB_PR_NUMBER ?? null,
+      user_email: env.CURSOR_USER_EMAIL ?? null,
     });
-    const config = resolveIngestConfig(opts.env ?? process.env);
+    const config = resolveIngestConfig(env);
     if (config.url) {
       try {
-        await postIngest({
+        const response = await postIngest({
           body: payload,
           fetchImpl,
           token: config.token,
           url: config.url,
         });
-      } catch {
-        // fail-open ingest errors
+        if (!response.ok) {
+          logHookWarning(
+            projectRoot,
+            `ingest HTTP ${response.status} for ${payload.hook_event}`
+          );
+        }
+      } catch (error) {
+        const detail =
+          error instanceof Error ? error.message : "network error";
+        logHookWarning(
+          projectRoot,
+          `ingest failed for ${payload.hook_event}: ${detail}`
+        );
       }
     }
-  } catch {
-    // fail-open
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown error";
+    logHookWarning(projectRoot, `hook error: ${detail}`);
+  } finally {
+    if (!isClaudeHookEvent(rawHookEvent)) {
+      write("{}\n");
+    }
   }
-  write("{}\n");
 };
 
 const isMain = function isMain() {
@@ -470,8 +573,11 @@ const isMain = function isMain() {
 if (isMain()) {
   try {
     await runHook();
-  } catch {
-    process.stdout.write("{}\n");
+  } catch (error) {
+    logHookWarning(
+      resolveProjectRoot(),
+      `hook fatal: ${error instanceof Error ? error.message : "unknown error"}`
+    );
   } finally {
     process.exit(0);
   }

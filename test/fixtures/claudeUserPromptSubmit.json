@@ -1,0 +1,7 @@
+{
+  "session_id": "claude-session-1",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Add Claude hook support to ai-dev-insights",
+  "cwd": "/Users/dev/ai-dev-insights",
+  "model": "claude-sonnet-4-20250514"
+}
