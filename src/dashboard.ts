@@ -1,4 +1,10 @@
-import type { CorpusDigest, InsightsFinding, InsightsReport, UsageBucket, UsageReport } from "./types";
+import type {
+  CorpusDigest,
+  InsightsFinding,
+  InsightsReport,
+  UsageBucket,
+  UsageReport,
+} from "./types";
 
 const escapeHtml = (value: string): string =>
   value
@@ -163,10 +169,7 @@ const findingBlock = (finding: InsightsFinding): string => `
             <p class="meta">Evidence event ids: ${finding.evidence_ids.length > 0 ? finding.evidence_ids.join(", ") : "none"}</p>
         </article>`;
 
-const findingSection = (
-  title: string,
-  findings: InsightsFinding[]
-): string => {
+const findingSection = (title: string, findings: InsightsFinding[]): string => {
   if (findings.length === 0) {
     return `<section><h2>${escapeHtml(title)}</h2><p>Nothing flagged yet.</p></section>`;
   }

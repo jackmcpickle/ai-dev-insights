@@ -214,7 +214,10 @@ export const extractUsage = function extractUsage(event) {
  * @param {string} rawHookEvent - Raw hook event name from the agent.
  */
 const pickText = function pickText(event, hookEvent, rawHookEvent) {
-  if (hookEvent === "beforeSubmitPrompt" || rawHookEvent === "UserPromptSubmit") {
+  if (
+    hookEvent === "beforeSubmitPrompt" ||
+    rawHookEvent === "UserPromptSubmit"
+  ) {
     return asString(event.prompt);
   }
   if (hookEvent === "afterAgentResponse" || hookEvent === "afterAgentThought") {
@@ -230,7 +233,11 @@ const pickText = function pickText(event, hookEvent, rawHookEvent) {
       asString(event.task)
     );
   }
-  if (hookEvent === "stop" || rawHookEvent === "Stop" || rawHookEvent === "StopFailure") {
+  if (
+    hookEvent === "stop" ||
+    rawHookEvent === "Stop" ||
+    rawHookEvent === "StopFailure"
+  ) {
     return asString(event.text) ?? asString(event.last_assistant_message);
   }
   return (
@@ -271,20 +278,10 @@ export const sanitizePayload = function sanitizePayload(value, depth = 0) {
 };
 
 /**
- * @param {unknown} raw - Raw hook event from stdin.
- * @param {Record<string, unknown>} [extras] - Git context and env overrides.
+ * @param {Record<string, unknown>} event - Hook event payload.
+ * @param {Record<string, unknown>} extras - Git context and env overrides.
  */
-export const buildIngestPayload = function buildIngestPayload(
-  raw,
-  extras = {}
-) {
-  const event = asRecord(raw) ?? {};
-  const rawHookEvent =
-    asString(event.hook_event_name) ?? asString(extras.hook_event) ?? "unknown";
-  const hookEvent = normalizeHookEventName(rawHookEvent);
-  const branch =
-    asString(event.git_branch) ?? asString(extras.git_branch) ?? null;
-  const repo = asString(event.repo) ?? asString(extras.repo) ?? null;
+const resolveWorkspaceRoots = function resolveWorkspaceRoots(event, extras) {
   let workspaceRoots = [];
   if (Array.isArray(event.workspace_roots)) {
     workspaceRoots = event.workspace_roots.filter(
@@ -299,11 +296,37 @@ export const buildIngestPayload = function buildIngestPayload(
   if (workspaceRoots.length === 0 && cwd) {
     workspaceRoots = [cwd];
   }
+  return workspaceRoots;
+};
 
-  const status =
-    rawHookEvent === "StopFailure"
-      ? (asString(event.error) ?? "error")
-      : (asString(event.status) ?? asString(event.reason));
+/**
+ * @param {string} rawHookEvent - Raw hook event name from the agent.
+ * @param {Record<string, unknown>} event - Hook event payload.
+ */
+const resolveHookStatus = function resolveHookStatus(rawHookEvent, event) {
+  if (rawHookEvent === "StopFailure") {
+    return asString(event.error) ?? "error";
+  }
+  return asString(event.status) ?? asString(event.reason);
+};
+
+/**
+ * @param {unknown} raw - Raw hook event from stdin.
+ * @param {Record<string, unknown>} [extras] - Git context and env overrides.
+ */
+export const buildIngestPayload = function buildIngestPayload(
+  raw,
+  extras = {}
+) {
+  const event = asRecord(raw) ?? {};
+  const rawHookEvent =
+    asString(event.hook_event_name) ?? asString(extras.hook_event) ?? "unknown";
+  const hookEvent = normalizeHookEventName(rawHookEvent);
+  const branch =
+    asString(event.git_branch) ?? asString(extras.git_branch) ?? null;
+  const repo = asString(event.repo) ?? asString(extras.repo) ?? null;
+  const workspaceRoots = resolveWorkspaceRoots(event, extras);
+  const status = resolveHookStatus(rawHookEvent, event);
 
   return {
     conversation_id:
@@ -398,9 +421,7 @@ export const resolveIngestConfig = function resolveIngestConfig(
 ) {
   const files = [
     resolve(
-      env.CURSOR_PROJECT_DIR ??
-        env.CLAUDE_PROJECT_DIR ??
-        process.cwd(),
+      env.CURSOR_PROJECT_DIR ?? env.CLAUDE_PROJECT_DIR ?? process.cwd(),
       ".cursor/hooks.env"
     ),
     resolve(homedir(), ".ai-dev-insights.env"),
@@ -482,6 +503,54 @@ export const postIngest = function postIngest({
   });
 };
 
+/** @param {Record<string, unknown>} event - Parsed hook event payload. */
+const eventWorkspaceRoots = function eventWorkspaceRoots(event) {
+  const cwd = asString(event.cwd);
+  if (Array.isArray(event.workspace_roots)) {
+    return event.workspace_roots;
+  }
+  if (cwd) {
+    return [cwd];
+  }
+  return [];
+};
+
+/**
+ * @param {{
+ *   projectRoot: string,
+ *   payload: ReturnType<typeof buildIngestPayload>,
+ *   config: ReturnType<typeof resolveIngestConfig>,
+ *   fetchImpl: typeof fetch,
+ * }} args - Ingest attempt options.
+ */
+const postIngestSafely = async function postIngestSafely({
+  projectRoot,
+  payload,
+  config,
+  fetchImpl,
+}) {
+  try {
+    const response = await postIngest({
+      body: payload,
+      fetchImpl,
+      token: config.token,
+      url: config.url,
+    });
+    if (!response.ok) {
+      logHookWarning(
+        projectRoot,
+        `ingest HTTP ${response.status} for ${payload.hook_event}`
+      );
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "network error";
+    logHookWarning(
+      projectRoot,
+      `ingest failed for ${payload.hook_event}: ${detail}`
+    );
+  }
+};
+
 /**
  * @param {{
  *   readStdin?: () => Promise<string>,
@@ -511,12 +580,7 @@ export const runHook = async function runHook(opts = {}) {
     }
     const event = asRecord(parsed) ?? {};
     rawHookEvent = asString(event.hook_event_name);
-    const cwd = asString(event.cwd);
-    const roots = Array.isArray(event.workspace_roots)
-      ? event.workspace_roots
-      : cwd
-        ? [cwd]
-        : [];
+    const roots = eventWorkspaceRoots(event);
     const gitContext = (opts.resolveGit ?? resolveGitContext)(roots);
     projectRoot = gitContext.workspace_root ?? resolveProjectRoot(env, roots);
     const payload = buildIngestPayload(event, {
@@ -526,27 +590,7 @@ export const runHook = async function runHook(opts = {}) {
     });
     const config = resolveIngestConfig(env);
     if (config.url) {
-      try {
-        const response = await postIngest({
-          body: payload,
-          fetchImpl,
-          token: config.token,
-          url: config.url,
-        });
-        if (!response.ok) {
-          logHookWarning(
-            projectRoot,
-            `ingest HTTP ${response.status} for ${payload.hook_event}`
-          );
-        }
-      } catch (error) {
-        const detail =
-          error instanceof Error ? error.message : "network error";
-        logHookWarning(
-          projectRoot,
-          `ingest failed for ${payload.hook_event}: ${detail}`
-        );
-      }
+      await postIngestSafely({ config, fetchImpl, payload, projectRoot });
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error";

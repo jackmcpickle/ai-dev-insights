@@ -7,9 +7,12 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
-const wrapperPath = path.join(homedir(), ".claude/hooks/run-ai-dev-insights.sh");
+const wrapperPath = path.join(
+  homedir(),
+  ".claude/hooks/run-ai-dev-insights.sh"
+);
 const COMMAND = `bash "${wrapperPath}"`;
-const INSIGHTS_HOOK = { type: "command", command: COMMAND, timeout: 8 };
+const INSIGHTS_HOOK = { command: COMMAND, timeout: 8, type: "command" };
 const EVENTS = [
   "SessionStart",
   "SessionEnd",
@@ -31,7 +34,7 @@ if (!existing.hooks || typeof existing.hooks !== "object") {
   existing.hooks = {};
 }
 
-/** @param {unknown} hook */
+/** @param {unknown} hook - Hook command entry from settings JSON. */
 const isInsightsCommand = (hook) =>
   typeof hook === "object" &&
   hook !== null &&
@@ -40,7 +43,7 @@ const isInsightsCommand = (hook) =>
   (hook.command.includes("ingest.mjs") ||
     hook.command.includes("ai-dev-insights"));
 
-/** @param {unknown} entry */
+/** @param {unknown} entry - Matcher group from Claude settings JSON. */
 const isInsightsGroup = (entry) => {
   if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
     return false;
@@ -51,49 +54,53 @@ const isInsightsGroup = (entry) => {
   return isInsightsCommand(entry);
 };
 
-/** @param {unknown} entry */
-const toInsightsGroup = (entry) => {
-  if (isInsightsGroup(entry)) {
-    return { hooks: [{ ...INSIGHTS_HOOK }] };
+/** @param {unknown} entry - Matcher group to inspect for an existing command. */
+const insightsCommand = (entry) => {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    return "";
   }
-  return entry;
+  if (
+    Array.isArray(entry.hooks) &&
+    typeof entry.hooks[0]?.command === "string"
+  ) {
+    return entry.hooks[0].command;
+  }
+  return typeof entry.command === "string" ? entry.command : "";
+};
+
+/** @param {unknown[]} list - Existing hook groups for one event. */
+const mergeEventHooks = (list) => {
+  let hasInsights = false;
+  let upgraded = 0;
+  const next = [];
+  for (const entry of list) {
+    if (!isInsightsGroup(entry)) {
+      next.push(entry);
+      continue;
+    }
+    hasInsights = true;
+    if (insightsCommand(entry) !== COMMAND) {
+      upgraded += 1;
+    }
+    next.push({ hooks: [{ ...INSIGHTS_HOOK }] });
+  }
+  if (!hasInsights) {
+    next.push({ hooks: [{ ...INSIGHTS_HOOK }] });
+    return { added: 1, hooks: next, upgraded };
+  }
+  return { added: 0, hooks: next, upgraded };
 };
 
 let added = 0;
 let upgraded = 0;
 for (const event of EVENTS) {
-  const list = Array.isArray(existing.hooks[event]) ? existing.hooks[event] : [];
-  if (!Array.isArray(existing.hooks[event])) {
-    existing.hooks[event] = list;
-  }
-
-  let hasInsights = false;
-  const next = list.map((entry) => {
-    if (!isInsightsGroup(entry)) {
-      return entry;
-    }
-    hasInsights = true;
-    const command =
-      typeof entry === "object" &&
-      entry !== null &&
-      !Array.isArray(entry) &&
-      Array.isArray(entry.hooks) &&
-      typeof entry.hooks[0]?.command === "string"
-        ? entry.hooks[0].command
-        : typeof entry.command === "string"
-          ? entry.command
-          : "";
-    if (command !== COMMAND) {
-      upgraded += 1;
-    }
-    return { hooks: [{ ...INSIGHTS_HOOK }] };
-  });
-
-  if (!hasInsights) {
-    next.push({ hooks: [{ ...INSIGHTS_HOOK }] });
-    added += 1;
-  }
-  existing.hooks[event] = next;
+  const list = Array.isArray(existing.hooks[event])
+    ? existing.hooks[event]
+    : [];
+  const merged = mergeEventHooks(list);
+  existing.hooks[event] = merged.hooks;
+  added += merged.added;
+  upgraded += merged.upgraded;
 }
 
 writeFileSync(settingsPath, `${JSON.stringify(existing, null, 2)}\n`);

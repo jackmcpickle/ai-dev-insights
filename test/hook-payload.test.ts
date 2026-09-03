@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { createServer } from "node:http";
 import type { IncomingMessage } from "node:http";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -89,9 +89,11 @@ describe("hook stdin → payload mapping", () => {
       hook_event: "beforeSubmitPrompt",
       text: "Add Claude hook support to ai-dev-insights",
     });
-    expect(normalizeHookEventName("UserPromptSubmit")).toBe("beforeSubmitPrompt");
-    expect(isClaudeHookEvent("UserPromptSubmit")).toBe(true);
-    expect(isClaudeHookEvent("beforeSubmitPrompt")).toBe(false);
+    expect(normalizeHookEventName("UserPromptSubmit")).toBe(
+      "beforeSubmitPrompt"
+    );
+    expect(isClaudeHookEvent("UserPromptSubmit")).toBeTruthy();
+    expect(isClaudeHookEvent("beforeSubmitPrompt")).toBeFalsy();
 
     const stop = buildIngestPayload(loadFixture("claudeStop.json"), {
       git_branch: "main",
@@ -149,16 +151,16 @@ describe("hook stdin → payload mapping", () => {
     expect(readFileSync(logPath, "utf-8")).toContain(
       "ingest failed for stop: offline"
     );
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { force: true, recursive: true });
   });
 
   it("writes hook warnings to the project log file", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "ai-dev-insights-log-"));
     logHookWarning(dir, "test warning");
-    expect(readFileSync(path.join(dir, ".cursor/hooks.log"), "utf-8")).toContain(
-      "test warning"
-    );
-    rmSync(dir, { recursive: true, force: true });
+    expect(
+      readFileSync(path.join(dir, ".cursor/hooks.log"), "utf-8")
+    ).toContain("test warning");
+    rmSync(dir, { force: true, recursive: true });
   });
 
   it("POSTs the mapped payload and still prints {} when the network fails", async () => {
