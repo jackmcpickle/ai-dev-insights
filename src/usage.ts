@@ -45,38 +45,35 @@ export const emptyBucket = (
   turns_with_token_fields: 0,
 });
 
+const HOOK_COUNTERS: Partial<
+  Record<StoredEvent["hook_event"], (bucket: UsageBucket) => void>
+> = {
+  afterAgentResponse: (bucket) => {
+    bucket.response_count += 1;
+  },
+  afterAgentThought: (bucket) => {
+    bucket.thought_count += 1;
+  },
+  beforeSubmitPrompt: (bucket) => {
+    bucket.prompt_count += 1;
+  },
+  preCompact: (bucket) => {
+    bucket.compact_count += 1;
+  },
+  stop: (bucket) => {
+    bucket.stop_count += 1;
+  },
+  subagentStart: (bucket) => {
+    bucket.subagent_count += 1;
+  },
+  subagentStop: (bucket) => {
+    bucket.subagent_count += 1;
+  },
+};
+
 const addCount = (bucket: UsageBucket, event: StoredEvent): void => {
   bucket.event_count += 1;
-  switch (event.hook_event) {
-    case "beforeSubmitPrompt": {
-      bucket.prompt_count += 1;
-      break;
-    }
-    case "afterAgentResponse": {
-      bucket.response_count += 1;
-      break;
-    }
-    case "afterAgentThought": {
-      bucket.thought_count += 1;
-      break;
-    }
-    case "stop": {
-      bucket.stop_count += 1;
-      break;
-    }
-    case "subagentStart":
-    case "subagentStop": {
-      bucket.subagent_count += 1;
-      break;
-    }
-    case "preCompact": {
-      bucket.compact_count += 1;
-      break;
-    }
-    default: {
-      break;
-    }
-  }
+  HOOK_COUNTERS[event.hook_event]?.(bucket);
 };
 
 const maxNullable = (
@@ -108,35 +105,33 @@ const hasTurnTokens = (usage: UsageFields): boolean =>
   (usage.cache_read_tokens !== null && usage.cache_read_tokens !== undefined) ||
   (usage.cache_write_tokens !== null && usage.cache_write_tokens !== undefined);
 
+const isTurnHook = (hookEvent: string): boolean =>
+  hookEvent === "stop" || hookEvent === "afterAgentResponse";
+
+const turnGroupKey = (event: StoredEvent): string =>
+  event.generation_id ?? `${event.conversation_id ?? "none"}:${event.id}`;
+
+const pickTurnFromGroup = (group: StoredEvent[]): StoredEvent =>
+  group.find(
+    (event) => event.hook_event === "stop" && hasTurnTokens(event.usage)
+  ) ??
+  group.find((event) => hasTurnTokens(event.usage)) ??
+  group.find((event) => event.hook_event === "stop") ??
+  group[0];
+
 /** One usage row per generation. Prefer stop when it has tokens, else any row with tokens. */
 export const selectTurnUsage = (events: StoredEvent[]): StoredEvent[] => {
   const byKey = new Map<string, StoredEvent[]>();
   for (const event of events) {
-    if (
-      event.hook_event !== "stop" &&
-      event.hook_event !== "afterAgentResponse"
-    ) {
+    if (!isTurnHook(event.hook_event)) {
       continue;
     }
-    const key =
-      event.generation_id ?? `${event.conversation_id ?? "none"}:${event.id}`;
+    const key = turnGroupKey(event);
     const group = byKey.get(key) ?? [];
     group.push(event);
     byKey.set(key, group);
   }
-
-  const chosen: StoredEvent[] = [];
-  for (const group of byKey.values()) {
-    chosen.push(
-      group.find(
-        (event) => event.hook_event === "stop" && hasTurnTokens(event.usage)
-      ) ??
-        group.find((event) => hasTurnTokens(event.usage)) ??
-        group.find((event) => event.hook_event === "stop") ??
-        group[0]
-    );
-  }
-  return chosen;
+  return [...byKey.values()].map(pickTurnFromGroup);
 };
 
 const applyTurnTokens = (bucket: UsageBucket, turns: StoredEvent[]): void => {
@@ -246,53 +241,66 @@ const buildGroups = (
   return buckets.toSorted((a, b) => b.event_count - a.event_count);
 };
 
+const prFilterActive = (filter: Pick<EventFilter, "pr">): boolean =>
+  filter.pr !== null && filter.pr !== undefined;
+
+const fieldMismatch = (
+  expected: string | null | undefined,
+  actual: string | null
+): boolean => Boolean(expected) && actual !== expected;
+
 const matchesBranchPr = (
   event: Pick<StoredEvent, "git_branch" | "pr_number">,
   filter: Pick<EventFilter, "branch" | "pr">
 ): boolean => {
-  if (filter.branch && filter.pr !== null && filter.pr !== undefined) {
+  if (filter.branch && prFilterActive(filter)) {
     return event.git_branch === filter.branch || event.pr_number === filter.pr;
   }
-  if (filter.branch && event.git_branch !== filter.branch) {
+  if (fieldMismatch(filter.branch, event.git_branch)) {
     return false;
   }
-  if (
-    filter.pr !== null &&
-    filter.pr !== undefined &&
-    event.pr_number !== filter.pr
-  ) {
+  if (prFilterActive(filter) && event.pr_number !== filter.pr) {
     return false;
   }
   return true;
 };
 
+const isBeforeSince = (
+  event: Pick<StoredEvent, "received_at">,
+  since: number | null | undefined
+): boolean =>
+  since !== null && since !== undefined && event.received_at < since;
+
+const isAfterUntil = (
+  event: Pick<StoredEvent, "received_at">,
+  until: number | null | undefined
+): boolean =>
+  until !== null && until !== undefined && event.received_at > until;
+
+const isBeforeCursor = (
+  event: Pick<StoredEvent, "id">,
+  afterId: number | null | undefined
+): boolean => afterId !== null && afterId !== undefined && event.id <= afterId;
+
 const matchesTimeBounds = (
   event: Pick<StoredEvent, "received_at" | "id">,
   filter: Pick<EventFilter, "since" | "until" | "after_id">
-): boolean => {
-  if (
-    filter.since !== null &&
-    filter.since !== undefined &&
-    event.received_at < filter.since
-  ) {
-    return false;
-  }
-  if (
-    filter.until !== null &&
-    filter.until !== undefined &&
-    event.received_at > filter.until
-  ) {
-    return false;
-  }
-  if (
-    filter.after_id !== null &&
-    filter.after_id !== undefined &&
-    event.id <= filter.after_id
-  ) {
-    return false;
-  }
-  return true;
-};
+): boolean =>
+  !isBeforeSince(event, filter.since) &&
+  !isAfterUntil(event, filter.until) &&
+  !isBeforeCursor(event, filter.after_id);
+
+const matchesIdentity = (
+  event: Pick<
+    StoredEvent,
+    "user_email" | "repo" | "hook_event" | "conversation_id"
+  >,
+  filter: EventFilter
+): boolean =>
+  !fieldMismatch(filter.user, event.user_email) &&
+  !fieldMismatch(filter.repo, event.repo) &&
+  !fieldMismatch(filter.hook, event.hook_event) &&
+  !fieldMismatch(filter.conversation_id, event.conversation_id);
 
 export const matchesFilter = (
   event: Pick<
@@ -307,27 +315,10 @@ export const matchesFilter = (
     | "id"
   >,
   filter: EventFilter
-): boolean => {
-  if (!matchesBranchPr(event, filter)) {
-    return false;
-  }
-  if (filter.user && event.user_email !== filter.user) {
-    return false;
-  }
-  if (filter.repo && event.repo !== filter.repo) {
-    return false;
-  }
-  if (filter.hook && event.hook_event !== filter.hook) {
-    return false;
-  }
-  if (
-    filter.conversation_id &&
-    event.conversation_id !== filter.conversation_id
-  ) {
-    return false;
-  }
-  return matchesTimeBounds(event, filter);
-};
+): boolean =>
+  matchesBranchPr(event, filter) &&
+  matchesIdentity(event, filter) &&
+  matchesTimeBounds(event, filter);
 
 export const summarizeEvents = (
   events: StoredEvent[],

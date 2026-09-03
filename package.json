@@ -10,6 +10,7 @@
     "db:migrate:local": "wrangler d1 migrations apply ai-dev-insights --local",
     "db:migrate": "wrangler d1 migrations apply ai-dev-insights --remote",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "check": "ultracite check",
@@ -21,6 +22,8 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260901.1",
     "@types/node": "^26.4.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint-plugin-crap": "^0.1.3",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
     "typescript": "^7.0.2",

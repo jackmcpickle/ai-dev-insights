@@ -38,6 +38,62 @@ const addTokens = (
   return (current ?? 0) + next;
 };
 
+const createConversationDigest = (
+  id: string,
+  group: StoredEvent[]
+): ConversationDigest => ({
+  conversation_id: id.startsWith("loose:") ? id : id,
+  error_count: 0,
+  git_branch: group[0]?.git_branch ?? null,
+  input_tokens: null,
+  last_status: null,
+  models: [],
+  output_tokens: null,
+  pr_number: group[0]?.pr_number ?? null,
+  prompt_count: 0,
+  repo: group[0]?.repo ?? null,
+  skills: [],
+  stop_count: 0,
+});
+
+const isFailedStop = (event: StoredEvent): boolean =>
+  (event.hook_event === "stop" || event.hook_event === "subagentStop") &&
+  (event.status === "error" || event.status === "aborted");
+
+const applyEventToDigest = (
+  digest: ConversationDigest,
+  event: StoredEvent
+): void => {
+  if (event.hook_event === "beforeSubmitPrompt") {
+    digest.prompt_count += 1;
+  }
+  if (event.hook_event === "stop") {
+    digest.stop_count += 1;
+    digest.last_status = event.status;
+  }
+  if (isFailedStop(event)) {
+    digest.error_count += 1;
+  }
+  addModel(digest.models, event.model);
+  addSkill(digest.skills, extractSkillMentions(event.text));
+};
+
+const applyTurnTokens = (
+  digest: ConversationDigest,
+  group: StoredEvent[]
+): void => {
+  for (const turn of selectTurnUsage(group)) {
+    digest.input_tokens = addTokens(
+      digest.input_tokens,
+      turn.usage.input_tokens
+    );
+    digest.output_tokens = addTokens(
+      digest.output_tokens,
+      turn.usage.output_tokens
+    );
+  }
+};
+
 export const buildConversations = (
   events: StoredEvent[]
 ): ConversationDigest[] => {
@@ -51,47 +107,11 @@ export const buildConversations = (
 
   const out: ConversationDigest[] = [];
   for (const [id, group] of groups) {
-    const digest: ConversationDigest = {
-      conversation_id: id.startsWith("loose:") ? id : id,
-      error_count: 0,
-      git_branch: group[0]?.git_branch ?? null,
-      input_tokens: null,
-      last_status: null,
-      models: [],
-      output_tokens: null,
-      pr_number: group[0]?.pr_number ?? null,
-      prompt_count: 0,
-      repo: group[0]?.repo ?? null,
-      skills: [],
-      stop_count: 0,
-    };
+    const digest = createConversationDigest(id, group);
     for (const event of group) {
-      if (event.hook_event === "beforeSubmitPrompt") {
-        digest.prompt_count += 1;
-      }
-      if (event.hook_event === "stop") {
-        digest.stop_count += 1;
-        digest.last_status = event.status;
-      }
-      if (
-        (event.hook_event === "stop" || event.hook_event === "subagentStop") &&
-        (event.status === "error" || event.status === "aborted")
-      ) {
-        digest.error_count += 1;
-      }
-      addModel(digest.models, event.model);
-      addSkill(digest.skills, extractSkillMentions(event.text));
+      applyEventToDigest(digest, event);
     }
-    for (const turn of selectTurnUsage(group)) {
-      digest.input_tokens = addTokens(
-        digest.input_tokens,
-        turn.usage.input_tokens
-      );
-      digest.output_tokens = addTokens(
-        digest.output_tokens,
-        turn.usage.output_tokens
-      );
-    }
+    applyTurnTokens(digest, group);
     out.push(digest);
   }
   return out.toSorted((a, b) => b.prompt_count - a.prompt_count);

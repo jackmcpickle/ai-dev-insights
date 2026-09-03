@@ -11,9 +11,10 @@ import {
   parseEventFilter,
   toExportEvent,
 } from "./export";
+import { toIngestPayload } from "./ingest-normalize";
 import { runInsightsPass } from "./insights";
 import { createD1Store } from "./store";
-import type { IngestPayload, InsightsStore } from "./types";
+import type { InsightsStore } from "./types";
 import { isIngestPayload, summarizeEvents } from "./usage";
 
 export interface AppEnv {
@@ -22,43 +23,6 @@ export interface AppEnv {
 }
 
 const MAX_BODY_BYTES = 256_000;
-
-const parseOptionalFloor = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value)
-    ? Math.floor(value)
-    : null;
-
-const parseOptionalReceivedAt = (value: unknown): number | undefined => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.floor(value);
-  }
-  return undefined;
-};
-
-const toIngestPayload = (body: IngestPayload): IngestPayload => ({
-  conversation_id: body.conversation_id ?? null,
-  cursor_version: body.cursor_version ?? null,
-  generation_id: body.generation_id ?? null,
-  git_branch: body.git_branch ?? null,
-  hook_event: body.hook_event,
-  model: body.model ?? null,
-  model_id: body.model_id ?? null,
-  payload: body.payload ?? {},
-  pr_number: parseOptionalFloor(body.pr_number),
-  received_at: parseOptionalReceivedAt(body.received_at),
-  repo: body.repo ?? null,
-  status: body.status ?? null,
-  subagent_id: body.subagent_id ?? null,
-  subagent_type: body.subagent_type ?? null,
-  text: body.text ?? null,
-  usage: body.usage ?? {},
-  user_email: body.user_email ?? null,
-  workspace_roots: Array.isArray(body.workspace_roots)
-    ? body.workspace_roots.filter(
-        (root): root is string => typeof root === "string"
-      )
-    : [],
-});
 
 const registerIngestRoute = (app: Hono<AppEnv>): void => {
   app.post("/v1/ingest", async (c) => {

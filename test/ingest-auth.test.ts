@@ -5,7 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import { buildIngestPayload } from "../.cursor/hooks/ingest.mjs";
 import { createApp } from "../src/app";
-import { extractBearer, isAuthorized, timingSafeEqual } from "../src/auth";
+import {
+  extractBearer,
+  extractToken,
+  isAuthorized,
+  timingSafeEqual,
+} from "../src/auth";
 import { formatPrComment } from "../src/comment";
 import { createMemoryStore } from "../src/store";
 import { summarizeEvents } from "../src/usage";
@@ -62,6 +67,29 @@ describe("ingest auth", () => {
         }),
         TOKEN
       )
+    ).toBeTruthy();
+  });
+
+  it("accepts x-insights-token, x-ingest-token, and query tokens", () => {
+    expect(
+      extractToken(
+        new Request("https://x.test/v1/usage", {
+          headers: { "x-insights-token": TOKEN },
+        })
+      )
+    ).toBe(TOKEN);
+    expect(
+      extractToken(
+        new Request("https://x.test/v1/usage", {
+          headers: { "x-ingest-token": TOKEN },
+        })
+      )
+    ).toBe(TOKEN);
+    expect(extractToken(new Request(`https://x.test/?token=${TOKEN}`))).toBe(
+      TOKEN
+    );
+    expect(
+      isAuthorized(new Request(`https://x.test/?token=${TOKEN}`), TOKEN)
     ).toBeTruthy();
   });
 
@@ -215,6 +243,95 @@ describe("ingest auth", () => {
     expect(report.totals.input_tokens).toBe(1_180_993);
     expect(report.totals.turns_with_token_fields).toBe(1);
     expect(report.totals.turns_missing_token_fields).toBe(0);
+  });
+
+  it("returns markdown from /v1/usage/comment", async () => {
+    const store = createMemoryStore();
+    const app = createApp({ store });
+    await ingest(
+      app,
+      buildIngestPayload(loadFixture("stop.json"), {
+        git_branch: "feat/usage",
+        pr_number: 7,
+      })
+    );
+
+    const commentRes = await app.request(
+      "/v1/usage/comment?branch=feat/usage&pr=7",
+      { headers: { authorization: `Bearer ${TOKEN}` } },
+      env()
+    );
+    expect(commentRes.status).toBe(200);
+    const commentBody = (await commentRes.json()) as {
+      markdown: string;
+      report: { totals: { input_tokens: number | null } };
+    };
+    expect(commentBody).toMatchObject({
+      markdown: expect.stringMatching(/<!-- ai-dev-insights -->[\s\S]*PR #7/u),
+      report: { totals: { input_tokens: 1_180_993 } },
+    });
+  });
+
+  it("returns HTML from the dashboard route", async () => {
+    const store = createMemoryStore();
+    const app = createApp({ store });
+    await ingest(
+      app,
+      buildIngestPayload(loadFixture("stop.json"), {
+        git_branch: "feat/usage",
+        pr_number: 7,
+      })
+    );
+
+    const dashRes = await app.request(
+      "/?branch=feat/usage&pr=7",
+      { headers: { authorization: `Bearer ${TOKEN}` } },
+      env()
+    );
+    const html = await dashRes.text();
+    expect({
+      contentType: dashRes.headers.get("content-type"),
+      html,
+      status: dashRes.status,
+    }).toMatchObject({
+      contentType: expect.stringContaining("text/html"),
+      html: expect.stringMatching(/AI dev insights[\s\S]*By pull request/u),
+      status: 200,
+    });
+    expect(html).not.toContain("<script");
+  });
+
+  it("rejects invalid ingest payloads and oversized bodies", async () => {
+    const app = createApp({ store: createMemoryStore() });
+    const headers = {
+      authorization: `Bearer ${TOKEN}`,
+      "content-type": "application/json",
+    };
+
+    const invalid = await app.request(
+      "/v1/ingest",
+      { body: JSON.stringify({ not_hook: true }), headers, method: "POST" },
+      env()
+    );
+    expect(invalid.status).toBe(400);
+
+    const emptyHook = await app.request(
+      "/v1/ingest",
+      { body: JSON.stringify({ hook_event: "   " }), headers, method: "POST" },
+      env()
+    );
+    expect(emptyHook.status).toBe(400);
+
+    const tooLarge = await app.request(
+      "/v1/ingest",
+      {
+        body: JSON.stringify({ hook_event: "stop" }),
+        headers: { ...headers, "content-length": "300000" },
+        method: "POST",
+      },
+      env()
+    );
+    expect(tooLarge.status).toBe(413);
   });
 
   it("does not double-count stop and afterAgentResponse for one generation", async () => {

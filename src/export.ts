@@ -17,58 +17,83 @@ export const parseTimestamp = (raw: string | null): number | undefined => {
   return Number.isFinite(ms) ? ms : undefined;
 };
 
-export const parseEventFilter = (url: URL): EventFilter => {
-  const filter: EventFilter = {};
-  const branch = url.searchParams.get("branch");
-  const user = url.searchParams.get("user");
-  const repo = url.searchParams.get("repo");
-  const hook =
-    url.searchParams.get("hook") ?? url.searchParams.get("hook_event");
-  const conversation = url.searchParams.get("conversation_id");
-  const prRaw = url.searchParams.get("pr");
-  const afterRaw = url.searchParams.get("after_id");
-  const limitRaw = url.searchParams.get("limit");
-  if (branch) {
-    filter.branch = branch;
+const assignStringParam = (
+  filter: EventFilter,
+  key: keyof EventFilter,
+  value: string | null
+): void => {
+  if (value) {
+    filter[key] = value as never;
   }
-  if (user) {
-    filter.user = user;
+};
+
+const parsePositiveInt = (raw: string | null): number | undefined => {
+  if (!raw) {
+    return undefined;
   }
-  if (repo) {
-    filter.repo = repo;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    return undefined;
   }
-  if (hook) {
-    filter.hook = hook;
+  return Math.floor(n);
+};
+
+const parseNonNegativeInt = (raw: string | null): number | undefined => {
+  if (!raw) {
+    return undefined;
   }
-  if (conversation) {
-    filter.conversation_id = conversation;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    return undefined;
   }
-  if (prRaw) {
-    const pr = Number(prRaw);
-    if (Number.isFinite(pr) && pr > 0) {
-      filter.pr = Math.floor(pr);
-    }
+  return Math.floor(n);
+};
+
+const applyStringParams = (
+  params: URLSearchParams,
+  filter: EventFilter
+): void => {
+  assignStringParam(filter, "branch", params.get("branch"));
+  assignStringParam(filter, "user", params.get("user"));
+  assignStringParam(filter, "repo", params.get("repo"));
+  assignStringParam(
+    filter,
+    "hook",
+    params.get("hook") ?? params.get("hook_event")
+  );
+  assignStringParam(filter, "conversation_id", params.get("conversation_id"));
+};
+
+const applyNumericParams = (
+  params: URLSearchParams,
+  filter: EventFilter
+): void => {
+  const pr = parsePositiveInt(params.get("pr"));
+  if (pr !== undefined) {
+    filter.pr = pr;
   }
-  const since = parseTimestamp(url.searchParams.get("since"));
-  const until = parseTimestamp(url.searchParams.get("until"));
-  if (since !== null && since !== undefined) {
+  const since = parseTimestamp(params.get("since"));
+  if (since !== undefined) {
     filter.since = since;
   }
-  if (until !== null && until !== undefined) {
+  const until = parseTimestamp(params.get("until"));
+  if (until !== undefined) {
     filter.until = until;
   }
-  if (afterRaw) {
-    const after = Number(afterRaw);
-    if (Number.isFinite(after) && after >= 0) {
-      filter.after_id = Math.floor(after);
-    }
+  const afterId = parseNonNegativeInt(params.get("after_id"));
+  if (afterId !== undefined) {
+    filter.after_id = afterId;
   }
-  if (limitRaw) {
-    const limit = Number(limitRaw);
-    if (Number.isFinite(limit) && limit > 0) {
-      filter.limit = Math.min(Math.floor(limit), EXPORT_MAX_LIMIT);
-    }
+  const limit = parsePositiveInt(params.get("limit"));
+  if (limit !== undefined) {
+    filter.limit = Math.min(limit, EXPORT_MAX_LIMIT);
   }
+};
+
+export const parseEventFilter = (url: URL): EventFilter => {
+  const filter: EventFilter = {};
+  applyStringParams(url.searchParams, filter);
+  applyNumericParams(url.searchParams, filter);
   return filter;
 };
 
