@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Fail-open hook wrapper for Cursor and Claude Code.
-# Never writes to stderr. Logs warnings to .cursor/hooks.log in the active project.
+# Never writes to stderr or the active project. Warnings go to user state storage.
 set +e
 
 PROJECT="${CLAUDE_PROJECT_DIR:-${CURSOR_PROJECT_DIR:-$(pwd)}}"
-LOG="${PROJECT}/.cursor/hooks.log"
+LOG_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/ai-dev-insights"
+LOG="${LOG_DIR}/hooks.log"
 HOME_SCRIPT="${HOME}/.claude/hooks/ai-dev-insights.mjs"
 PROJECT_SCRIPT="${PROJECT}/.cursor/hooks/ingest.mjs"
 
 warn() {
-    mkdir -p "${PROJECT}/.cursor" 2>/dev/null || return 0
+    mkdir -p "$LOG_DIR" 2>/dev/null || return 0
     printf '%s ai-dev-insights: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$LOG" 2>/dev/null || true
 }
 
