@@ -1,5 +1,8 @@
 import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
 
+import { accessConfigFromEnv, isAccessAuthorized } from "./access";
+import type { FetchKeys } from "./access";
 import { isAuthorized } from "./auth";
 import { formatPrComment } from "./comment";
 import { renderDashboard, renderInsightsPage } from "./dashboard";
@@ -121,7 +124,10 @@ const registerReadRoutes = (app: Hono<AppEnv>): void => {
   });
 };
 
-export const createApp = (opts?: { store?: InsightsStore }): Hono<AppEnv> => {
+export const createApp = (opts?: {
+  store?: InsightsStore;
+  fetchAccessKeys?: FetchKeys;
+}): Hono<AppEnv> => {
   const app = new Hono<AppEnv>();
 
   app.use("*", (c, next) => {
@@ -138,19 +144,22 @@ export const createApp = (opts?: { store?: InsightsStore }): Hono<AppEnv> => {
     return await next();
   });
 
-  app.use("/", async (c, next) => {
-    if (c.req.method !== "GET") {
-      return await next();
-    }
-    const path = new URL(c.req.url).pathname;
-    if (path !== "/" && path !== "/insights") {
-      return await next();
-    }
-    if (!isAuthorized(c.req.raw, c.env.INGEST_TOKEN)) {
+  // Dashboard pages: bearer/query token, or a Cloudflare Access session.
+  const requireViewer: MiddlewareHandler<AppEnv> = async (c, next) => {
+    const allowed =
+      isAuthorized(c.req.raw, c.env.INGEST_TOKEN) ||
+      (await isAccessAuthorized(
+        c.req.raw,
+        accessConfigFromEnv(c.env),
+        opts?.fetchAccessKeys
+      ));
+    if (!allowed) {
       return c.json({ error: "unauthorized" }, 401);
     }
     return await next();
-  });
+  };
+  app.use("/", requireViewer);
+  app.use("/insights", requireViewer);
 
   registerIngestRoute(app);
   registerReadRoutes(app);
