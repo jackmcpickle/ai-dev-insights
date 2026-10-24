@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
@@ -121,9 +121,9 @@ describe("hook stdin → payload mapping", () => {
     expect(inferPrNumber({ branch: "main", explicit: "18" })).toBe(18);
   });
 
-  it("logs ingest failures to .cursor/hooks.log and stays silent for Claude", async () => {
+  it("logs ingest failures outside the project and stays silent for Claude", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "ai-dev-insights-hook-"));
-    const logPath = path.join(dir, ".cursor/hooks.log");
+    const logPath = path.join(dir, "state/ai-dev-insights/hooks.log");
     let stdout = "";
 
     await runHook({
@@ -131,6 +131,7 @@ describe("hook stdin → payload mapping", () => {
         CLAUDE_PROJECT_DIR: dir,
         INGEST_TOKEN: "test-token",
         INGEST_URL: "https://insights.test",
+        XDG_STATE_HOME: path.join(dir, "state"),
       },
       fetchImpl: (() => {
         throw new Error("offline");
@@ -148,17 +149,18 @@ describe("hook stdin → payload mapping", () => {
     });
 
     expect(stdout).toBe("");
+    expect(existsSync(path.join(dir, ".cursor"))).toBeFalsy();
     expect(readFileSync(logPath, "utf-8")).toContain(
       "ingest failed for stop: offline"
     );
     rmSync(dir, { force: true, recursive: true });
   });
 
-  it("writes hook warnings to the project log file", () => {
+  it("writes hook warnings to the user state directory", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "ai-dev-insights-log-"));
-    logHookWarning(dir, "test warning");
+    logHookWarning("test warning", { XDG_STATE_HOME: dir });
     expect(
-      readFileSync(path.join(dir, ".cursor/hooks.log"), "utf-8")
+      readFileSync(path.join(dir, "ai-dev-insights/hooks.log"), "utf-8")
     ).toContain("test warning");
     rmSync(dir, { force: true, recursive: true });
   });

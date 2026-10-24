@@ -397,12 +397,18 @@ export const resolveProjectRoot = function resolveProjectRoot(
 };
 
 /**
- * @param {string} projectRoot - Project directory for the log file.
  * @param {string} message - Warning text (no secrets).
+ * @param {NodeJS.ProcessEnv} [env] - Environment containing the user state directory.
  */
-export const logHookWarning = function logHookWarning(projectRoot, message) {
+export const logHookWarning = function logHookWarning(
+  message,
+  env = process.env
+) {
   try {
-    const logDir = resolve(projectRoot, ".cursor");
+    const logDir = resolve(
+      env.XDG_STATE_HOME || resolve(homedir(), ".local", "state"),
+      "ai-dev-insights"
+    );
     const logPath = resolve(logDir, "hooks.log");
     mkdirSync(logDir, { recursive: true });
     appendFileSync(
@@ -517,14 +523,14 @@ const eventWorkspaceRoots = function eventWorkspaceRoots(event) {
 
 /**
  * @param {{
- *   projectRoot: string,
+ *   env: NodeJS.ProcessEnv,
  *   payload: ReturnType<typeof buildIngestPayload>,
  *   config: ReturnType<typeof resolveIngestConfig>,
  *   fetchImpl: typeof fetch,
  * }} args - Ingest attempt options.
  */
 const postIngestSafely = async function postIngestSafely({
-  projectRoot,
+  env,
   payload,
   config,
   fetchImpl,
@@ -538,16 +544,13 @@ const postIngestSafely = async function postIngestSafely({
     });
     if (!response.ok) {
       logHookWarning(
-        projectRoot,
-        `ingest HTTP ${response.status} for ${payload.hook_event}`
+        `ingest HTTP ${response.status} for ${payload.hook_event}`,
+        env
       );
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : "network error";
-    logHookWarning(
-      projectRoot,
-      `ingest failed for ${payload.hook_event}: ${detail}`
-    );
+    logHookWarning(`ingest failed for ${payload.hook_event}: ${detail}`, env);
   }
 };
 
@@ -567,7 +570,6 @@ export const runHook = async function runHook(opts = {}) {
   const env = opts.env ?? process.env;
   /** @type {string | null} */
   let rawHookEvent = null;
-  let projectRoot = resolveProjectRoot(env);
   try {
     const rawText = await read();
     let parsed = {};
@@ -582,7 +584,6 @@ export const runHook = async function runHook(opts = {}) {
     rawHookEvent = asString(event.hook_event_name);
     const roots = eventWorkspaceRoots(event);
     const gitContext = (opts.resolveGit ?? resolveGitContext)(roots);
-    projectRoot = gitContext.workspace_root ?? resolveProjectRoot(env, roots);
     const payload = buildIngestPayload(event, {
       ...gitContext,
       pr_number: env.GITHUB_PR_NUMBER ?? null,
@@ -590,11 +591,11 @@ export const runHook = async function runHook(opts = {}) {
     });
     const config = resolveIngestConfig(env);
     if (config.url) {
-      await postIngestSafely({ config, fetchImpl, payload, projectRoot });
+      await postIngestSafely({ config, env, fetchImpl, payload });
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error";
-    logHookWarning(projectRoot, `hook error: ${detail}`);
+    logHookWarning(`hook error: ${detail}`, env);
   } finally {
     if (!isClaudeHookEvent(rawHookEvent)) {
       write("{}\n");
@@ -619,7 +620,6 @@ if (isMain()) {
     await runHook();
   } catch (error) {
     logHookWarning(
-      resolveProjectRoot(),
       `hook fatal: ${error instanceof Error ? error.message : "unknown error"}`
     );
   } finally {

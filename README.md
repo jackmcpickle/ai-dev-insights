@@ -102,7 +102,7 @@ pnpm dev
 
 ## Hooks in this repo
 
-`.cursor/hooks.json` points at `node .cursor/hooks/ingest.mjs`. Claude Code uses `.claude/settings.json` with a fail-open wrapper. Hooks always exit 0; failures log to `.cursor/hooks.log` in the project (gitignored via `*.log`).
+`.cursor/hooks.json` points at `node .cursor/hooks/ingest.mjs`. Claude Code uses `.claude/settings.json` with a fail-open wrapper. Hooks always exit 0; failures log to `${XDG_STATE_HOME:-~/.local/state}/ai-dev-insights/hooks.log`, outside the project.
 
 Set the URL and token in `.cursor/hooks.env` (gitignored), `~/.ai-dev-insights.env`, or the process environment. Cloud agents need those names in the Cursor environment. They cannot see your home directory.
 
