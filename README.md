@@ -27,7 +27,9 @@ Cursor does not document billed tokens on the public hooks page. In practice `st
 
 ## API
 
-All routes except `/health` need `Authorization: Bearer $INGEST_TOKEN` (or `x-insights-token` / `?token=`).
+Production runs at `https://aiinsights.mcpickle.com.au` (`workers.dev` is off).
+
+`/v1/*` routes need `Authorization: Bearer $INGEST_TOKEN` (or `x-insights-token` / `?token=`). The dashboard pages (`/` and `/insights`) take the same token or a Cloudflare Access session. The Worker verifies the `Cf-Access-Jwt-Assertion` header against `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` in `wrangler.jsonc`. The Access app must bypass `/v1` and `/health` so hooks and CI can reach them with the bearer token.
 
 ```bash
 # hook payload (what ingest.mjs POSTs)
@@ -55,7 +57,7 @@ curl -sS -H "Authorization: Bearer $INGEST_TOKEN" \
   "$INGEST_URL/v1/digest?repo=jackmcpickle/ai-dev-insights"
 ```
 
-Open `/?token=...` for usage tables and `/insights?token=...` for the deterministic insights report. JSON equivalents: `GET /v1/usage`, `GET /v1/digest`, `GET /v1/insights`. Run `/agent-insights` in Cursor for a deeper skill/code proposal pass.
+Open `/` for usage tables and `/insights` for the deterministic insights report (sign in through Access, or append `?token=...`). JSON equivalents: `GET /v1/usage`, `GET /v1/digest`, `GET /v1/insights`. Run `/agent-insights` in Cursor for a deeper skill/code proposal pass.
 
 ## Insights skill
 
@@ -63,12 +65,12 @@ Open `/?token=...` for usage tables and `/insights?token=...` for the determinis
 
 ## Deploy
 
-**CI (main):** after Test passes, the Deploy workflow runs `pnpm db:migrate` then `pnpm deploy`. Set these GitHub repo secrets:
+**On merge to main:** Cloudflare Workers Builds deploys the Worker from GitHub. After Test passes, the Migrate workflow runs `pnpm db:migrate` against remote D1. Set these GitHub repo secrets:
 
-- `CLOUDFLARE_API_TOKEN` — API token with Workers Scripts Edit + D1 Edit
+- `CLOUDFLARE_API_TOKEN` — API token with D1 Edit
 - `CLOUDFLARE_ACCOUNT_ID` — `16a04bbc76ee5eccbcc1d6c39bc9a797` (Mcpickle)
 
-If Cloudflare Workers Builds also deploys from GitHub, disable it or accept double deploys; migrations must run before the Worker serves traffic.
+The two run in parallel, so the new Worker can briefly serve before its migration lands. Keep migrations additive (new tables/columns) so old and new code both work against either schema.
 
 **Manual:**
 

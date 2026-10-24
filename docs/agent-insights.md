@@ -10,7 +10,7 @@ The skill file is `skills/agent-insights/SKILL.md`. Cursor also loads `.cursor/s
 2. Put the same token and the Worker URL where the agent can see them:
 
 ```
-INGEST_URL=https://ai-dev-insights.<account>.workers.dev
+INGEST_URL=https://aiinsights.mcpickle.com.au
 INGEST_TOKEN=...
 ```
 
