@@ -12,7 +12,7 @@
   "vars": {
     // Cloudflare Access app guarding the dashboard. /v1/* and /health bypass Access.
     "ACCESS_TEAM_DOMAIN": "mcpickle.cloudflareaccess.com",
-    "ACCESS_AUD": "",
+    "ACCESS_AUD": "589b45417e89c47da1172bec3a33b9ba99a847171a3b03a38eabb1209bec9e29",
   },
   "preview_urls": true,
   "observability": {
